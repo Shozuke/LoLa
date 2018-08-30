@@ -41,24 +41,30 @@ void SI446X_CB_LOWBATT(void)
 	StaticSi446LoLa->OnBatteryAlarm();
 }
 
-///////////////////////
-
-void LoLaSi4463DriverOnReceived(void)
-{
-	StaticSi446LoLa->OnReceived();
-	Receiving = false;
-}
-
-void LoLaSi4463DriverCheckForPending(void)
-{
-	StaticSi446LoLa->CheckForPending();
-}
 
 LoLaSi446xPacketDriver::LoLaSi446xPacketDriver(Scheduler* scheduler)
 	: LoLaPacketDriver()
 	, EventQueue(scheduler)
 {
 	StaticSi446LoLa = this;
+
+	MethodSlot<Foo, char> memFunSlot(&StaticSi446LoLa, &LoLaSi446xPacketDriver::OnAsyncEvent);
+}
+
+
+void LoLaSi446xPacketDriver::OnAsyncEvent(const uint8_t actionCode)
+{
+	switch ((ReceiveActionsEnum)actionCode)
+	{
+	case ReceiveActionsEnum::Received:
+		OnReceived();
+		break;
+	case ReceiveActionsEnum::Check:
+		CheckForPending();
+		break;
+	default:
+		break;
+	}
 }
 
 void LoLaSi446xPacketDriver::OnWakeUpTimer()
@@ -109,7 +115,7 @@ void LoLaSi446xPacketDriver::EnableInterrupts()
 void LoLaSi446xPacketDriver::CheckForPendingAsync()
 {
 	//Asynchronously check for pending messages from the radio IC.
-	EventQueue.AppendEventToQueue(LoLaSi4463DriverCheckForPending);
+	EventQueue.AppendEventToQueue(ReceiveActionsEnum::Check);
 }
 
 bool LoLaSi446xPacketDriver::Transmit()
@@ -148,7 +154,7 @@ void LoLaSi446xPacketDriver::OnReceiveBegin(const uint8_t length, const int16_t 
 	DisableInterruptsInternal();
 
 	//Asynchronously process the received packet.
-	EventQueue.AppendEventToQueue(LoLaSi4463DriverOnReceived);
+	EventQueue.AppendEventToQueue(ReceiveActionsEnum::Receive);
 }
 
 void LoLaSi446xPacketDriver::OnReceived()
@@ -199,6 +205,8 @@ bool LoLaSi446xPacketDriver::Setup()
 {
 	if (LoLaPacketDriver::Setup())
 	{
+
+		EventQueue.AttachCallback();
 		SetTransmitPower(TRANSMIT_POWER);
 		SetChannel(CHANNEL);
 

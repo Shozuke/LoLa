@@ -10,6 +10,8 @@
 #include <PacketDriver\LoLaPacketDriver.h>
 #include <RingBufCPP.h>
 
+#include <Callback.h>
+
 #include <SPI.h>
 
 
@@ -44,41 +46,34 @@
 
 
 #define _TASK_OO_CALLBACKS
-#define PROCESS_EVENT_QUEUE_MAX_QUEUE_DEPTH 5
+#define ASYNC_RECEIVER_QUEUE_MAX_QUEUE_DEPTH 5
 
-class AsyncActor : Task
+class AsyncReceiver : Task
 {
 private:
-	RingBufCPP<void(*)(void), PROCESS_EVENT_QUEUE_MAX_QUEUE_DEPTH> EventQueue;
-
-	void(*GruntFunction)(void) = nullptr;
+	Signal<uint8_t> Callback;
+	uint8_t Grunt;
+	RingBufCPP<ReceiveActionsEnum,ASYNC_RECEIVER_QUEUE_MAX_QUEUE_DEPTH> EventQueue;
 
 public:
-	AsyncActor(Scheduler* scheduler)
+	AsyncReceiver(Scheduler* scheduler)
 		: Task(0, TASK_FOREVER, scheduler, false)
 	{
 	}
 
-	void AppendEventToQueue(void(*callFunction)(void))
+	void AttachCallback(const Slot<uint8_t>& slot)
 	{
-		if (callFunction != nullptr)
-		{
-			EventQueue.addForce(callFunction);
-		}
+		Callback.attach(slot);
+	}
 
-		if (!EventQueue.isEmpty())
-		{
-			enable();
-		}
+	void AppendEventToQueue(const uint8_t actionCode)
+	{
+		EventQueue.addForce(actionCode);
+		enable();
 	}
 
 	bool OnEnable()
-	{
-		if (EventQueue.isEmpty())
-		{
-			disable();
-		}
-
+	{		
 		return true;
 	}
 
@@ -88,26 +83,30 @@ public:
 
 	bool Callback()
 	{
-		EventQueue.pull(GruntFunction);
-
-		if (GruntFunction != nullptr)
-		{
-			GruntFunction();
-		}
-
 		if (EventQueue.isEmpty())
 		{
 			disable();
+			return false;
 		}
 
-		return false;
+		EventQueue.pull(Grunt);
+		Callback.fire(Grunt);
+
+		return true;
 	}
 };
 
 class LoLaSi446xPacketDriver : public LoLaPacketDriver
 {
+protected:
+	enum ReceiveActionsEnum : uint8_t
+	{
+		Receive,
+		Check
+	};
+
 private:
-	AsyncActor EventQueue;
+	AsyncReceiver EventQueue;
 
 protected:
 	bool Transmit();
@@ -137,5 +136,7 @@ public:
 
 	int16_t GetRSSIMax();
 	int16_t GetRSSIMin();
+
+	void OnAsyncEvent(const uint8_t actionCode);
 };
 #endif
