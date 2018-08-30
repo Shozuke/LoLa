@@ -6,11 +6,11 @@
 #define _TASK_OO_CALLBACKS
 
 #include <Arduino.h>
-#include <TaskSchedulerDeclarations.h>
+
 #include <PacketDriver\LoLaPacketDriver.h>
 #include <RingBufCPP.h>
 
-#include <Callback.h>
+#include <PacketDriver\AsyncActionCallback.h>
 
 #include <SPI.h>
 
@@ -45,56 +45,7 @@
 #define SI4463_MAX_RSSI (int16_t(-50))
 
 
-#define _TASK_OO_CALLBACKS
-#define ASYNC_RECEIVER_QUEUE_MAX_QUEUE_DEPTH 5
 
-class AsyncReceiver : Task
-{
-private:
-	Signal<uint8_t> Callback;
-	uint8_t Grunt;
-	RingBufCPP<ReceiveActionsEnum,ASYNC_RECEIVER_QUEUE_MAX_QUEUE_DEPTH> EventQueue;
-
-public:
-	AsyncReceiver(Scheduler* scheduler)
-		: Task(0, TASK_FOREVER, scheduler, false)
-	{
-	}
-
-	void AttachCallback(const Slot<uint8_t>& slot)
-	{
-		Callback.attach(slot);
-	}
-
-	void AppendEventToQueue(const uint8_t actionCode)
-	{
-		EventQueue.addForce(actionCode);
-		enable();
-	}
-
-	bool OnEnable()
-	{		
-		return true;
-	}
-
-	void OnDisable()
-	{
-	}
-
-	bool Callback()
-	{
-		if (EventQueue.isEmpty())
-		{
-			disable();
-			return false;
-		}
-
-		EventQueue.pull(Grunt);
-		Callback.fire(Grunt);
-
-		return true;
-	}
-};
 
 class LoLaSi446xPacketDriver : public LoLaPacketDriver
 {
@@ -106,7 +57,7 @@ protected:
 	};
 
 private:
-	AsyncReceiver EventQueue;
+	AsyncActionCallback EventQueue;
 
 protected:
 	bool Transmit();

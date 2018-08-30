@@ -48,7 +48,9 @@ LoLaSi446xPacketDriver::LoLaSi446xPacketDriver(Scheduler* scheduler)
 {
 	StaticSi446LoLa = this;
 
-	MethodSlot<Foo, char> memFunSlot(&StaticSi446LoLa, &LoLaSi446xPacketDriver::OnAsyncEvent);
+	MethodSlot<LoLaSi446xPacketDriver, uint8_t> DriverActionSlot(this, &LoLaSi446xPacketDriver::OnAsyncEvent);
+	EventQueue.AttachActionCallback(DriverActionSlot);
+
 }
 
 
@@ -56,7 +58,7 @@ void LoLaSi446xPacketDriver::OnAsyncEvent(const uint8_t actionCode)
 {
 	switch ((ReceiveActionsEnum)actionCode)
 	{
-	case ReceiveActionsEnum::Received:
+	case ReceiveActionsEnum::Receive:
 		OnReceived();
 		break;
 	case ReceiveActionsEnum::Check:
@@ -205,8 +207,6 @@ bool LoLaSi446xPacketDriver::Setup()
 {
 	if (LoLaPacketDriver::Setup())
 	{
-
-		EventQueue.AttachCallback();
 		SetTransmitPower(TRANSMIT_POWER);
 		SetChannel(CHANNEL);
 
