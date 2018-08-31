@@ -88,7 +88,6 @@ void LoLaSi446xPacketDriver::EnableInterrupts()
 	CheckForPendingAsync(); //Take this chance to make sure there are no pending interrupts.
 }
 
-
 bool LoLaSi446xPacketDriver::Transmit()
 {
 #ifdef MOCK_RADIO
@@ -164,6 +163,7 @@ int16_t LoLaSi446xPacketDriver::GetRSSIMax()
 {
 	return SI4463_MAX_RSSI;
 }
+
 int16_t LoLaSi446xPacketDriver::GetRSSIMin()
 {
 	return SI4463_MIN_RSSI;

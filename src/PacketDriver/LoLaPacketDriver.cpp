@@ -4,7 +4,7 @@
 
 #include <PacketDriver\LoLaPacketDriver.h>
 
-LoLaPacketDriver::LoLaPacketDriver(Scheduler* scheduler) : ILoLa() , EventQueue(scheduler)
+LoLaPacketDriver::LoLaPacketDriver(Scheduler* scheduler) : ILoLa(), EventQueue(scheduler)
 {
 	MethodSlot<LoLaPacketDriver, uint8_t> DriverActionSlot(this, &LoLaPacketDriver::OnAsyncEvent);
 	EventQueue.AttachActionCallback(DriverActionSlot);
@@ -17,6 +17,7 @@ void LoLaPacketDriver::OnBatteryAlarm()
 
 void LoLaPacketDriver::OnSentOk()
 {
+	//TODO: Log for statistics.
 }
 
 void LoLaPacketDriver::OnWakeUpTimer()
@@ -70,7 +71,7 @@ void LoLaPacketDriver::ReceivePacket()
 	if (!SetupOk || !Enabled || !Receiver.ReceivePacket() || !(Receiver.GetIncomingDefinition() != nullptr))
 	{
 	}
-	else 
+	else
 	{	//Packet received Ok, let's update that info really quick.
 		LastValidReceived = IncomingInfo.PacketTime;
 		LastValidReceivedRssi = IncomingInfo.PacketRSSI;
@@ -151,12 +152,12 @@ bool LoLaPacketDriver::SendPacket(ILoLaPacket* packet)
 }
 
 uint32_t LoLaPacketDriver::GetLastValidReceivedMillis()
-{ 
+{
 	return  LastValidReceived;
 }
 
-int16_t LoLaPacketDriver::GetLastValidRSSI() 
-{ 
+int16_t LoLaPacketDriver::GetLastValidRSSI()
+{
 	return LastValidReceivedRssi;
 }
 

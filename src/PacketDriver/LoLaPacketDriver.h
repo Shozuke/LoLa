@@ -73,21 +73,17 @@ public:
 	void OnAsyncEvent(const uint8_t actionCode);
 
 public:
+	virtual bool Setup();
+	virtual bool AllowedSend();
 	virtual bool SendPacket(ILoLaPacket* packet);
 
-public:
-	virtual bool Setup();
+	//Public calls for interrupts.
 	virtual void OnIncoming(const int16_t rssi);
 	virtual void OnReceiveBegin(const uint8_t length, const int16_t rssi);
 	virtual void OnReceivedFail(const int16_t rssi);
 	virtual void OnSentOk();
 	virtual void OnBatteryAlarm();
 	virtual void OnWakeUpTimer();
-
-	
-
-	virtual bool AllowedSend();
-	
 
 #ifdef DEBUG_LOLA
 	virtual void Debug(Stream* serial)
