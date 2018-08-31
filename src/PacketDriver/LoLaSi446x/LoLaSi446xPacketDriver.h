@@ -35,25 +35,20 @@
 // 127 = ABSOLUTE_MAX
 #define SI4463_MAX_TRANSMIT_POWER 40
 
-
-
 #define PART_NUMBER_SI4463X 17507
 
-
- 
 #define SI4463_MIN_RSSI (int16_t(-110))
 #define SI4463_MAX_RSSI (int16_t(-50))
-
-
-
 
 class LoLaSi446xPacketDriver : public LoLaPacketDriver
 {
 protected:
-	enum ReceiveActionsEnum : uint8_t
+	enum AsyncActionsEnum : uint8_t
 	{
 		Receive,
-		Check
+		Check,
+		BatteryAlarm,
+		WakeUpTimer
 	};
 
 private:
