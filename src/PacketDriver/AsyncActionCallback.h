@@ -3,10 +3,13 @@
 #ifndef _ASYNCACTIONCALLBACK_h
 #define _ASYNCACTIONCALLBACK_h
 
-#include <TaskSchedulerDeclarations.h>
-#include <Callback.h>
 
 #define _TASK_OO_CALLBACKS
+#include <TaskSchedulerDeclarations.h>
+#include <RingBufCPP.h>
+#include <Callback.h>
+
+
 #define ASYNC_RECEIVER_QUEUE_MAX_QUEUE_DEPTH 5
 
 class AsyncActionCallback : Task
