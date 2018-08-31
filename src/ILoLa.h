@@ -55,7 +55,7 @@ public:
 	{
 	}
 
-	uint8_t GetIdLength()
+	uint8_t GetIdLength() const
 	{
 		return IdProvider.GetUUIDLength();
 	}
