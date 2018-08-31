@@ -72,6 +72,7 @@ public:
 	void EnableInterrupts();
 
 	void OnWakeUpTimer();
+	void OnBatteryAlarm();
 	void OnReceiveBegin(const uint8_t length, const  int16_t rssi);
 
 	void OnReceivedFail(const int16_t rssi);
