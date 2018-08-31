@@ -8,10 +8,6 @@
 #include <Arduino.h>
 
 #include <PacketDriver\LoLaPacketDriver.h>
-#include <RingBufCPP.h>
-
-#include <PacketDriver\AsyncActionCallback.h>
-
 #include <SPI.h>
 
 
@@ -43,40 +39,26 @@
 class LoLaSi446xPacketDriver : public LoLaPacketDriver
 {
 protected:
-	enum AsyncActionsEnum : uint8_t
-	{
-		Receive,
-		Check,
-		BatteryAlarm,
-		WakeUpTimer
-	};
-
-private:
-	AsyncActionCallback EventQueue;
-
-protected:
 	bool Transmit();
 	bool CanTransmit();
 	void OnStart();
 
+	void ReceivePacket();
+	void CheckForPending();
+
 private:
-	void CheckForPendingAsync();
 	void DisableInterruptsInternal();
 
 public:
 	LoLaSi446xPacketDriver(Scheduler* scheduler);
 	bool Setup();
-	void CheckForPending();
 	bool DisableInterrupts();
 
 	void EnableInterrupts();
 
-	void OnWakeUpTimer();
-	void OnBatteryAlarm();
 	void OnReceiveBegin(const uint8_t length, const  int16_t rssi);
-
 	void OnReceivedFail(const int16_t rssi);
-	void OnReceived();
+
 
 	uint8_t GetTransmitPowerMax();
 	uint8_t GetTransmitPowerMin();
@@ -84,6 +66,6 @@ public:
 	int16_t GetRSSIMax();
 	int16_t GetRSSIMin();
 
-	void OnAsyncEvent(const uint8_t actionCode);
+	
 };
 #endif

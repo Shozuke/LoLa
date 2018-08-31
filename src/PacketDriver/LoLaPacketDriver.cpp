@@ -4,12 +4,15 @@
 
 #include <PacketDriver\LoLaPacketDriver.h>
 
-LoLaPacketDriver::LoLaPacketDriver() : ILoLa()
+LoLaPacketDriver::LoLaPacketDriver(Scheduler* scheduler) : ILoLa() , EventQueue(scheduler)
 {
+	MethodSlot<LoLaPacketDriver, uint8_t> DriverActionSlot(this, &LoLaPacketDriver::OnAsyncEvent);
+	EventQueue.AttachActionCallback(DriverActionSlot);
 }
 
 void LoLaPacketDriver::OnBatteryAlarm()
 {
+	EventQueue.AppendEventToQueue(AsyncActionsEnum::BatteryAlarm);
 }
 
 void LoLaPacketDriver::OnSentOk()
@@ -18,6 +21,7 @@ void LoLaPacketDriver::OnSentOk()
 
 void LoLaPacketDriver::OnWakeUpTimer()
 {
+	EventQueue.AppendEventToQueue(AsyncActionsEnum::WakeUpTimer);
 }
 
 //When RF detects incoming packet.
@@ -39,6 +43,9 @@ void LoLaPacketDriver::OnReceiveBegin(const uint8_t length, const int16_t rssi)
 		IncomingInfo.SetInfo(GetMillis(), rssi);
 	}
 	Receiver.SetBufferSize(length);
+
+	//Asynchronously process the received packet.
+	EventQueue.AppendEventToQueue(AsyncActionsEnum::Receive);
 }
 
 //When RF has received a garbled packet.
@@ -47,7 +54,13 @@ void LoLaPacketDriver::OnReceivedFail(const int16_t rssi)
 	IncomingInfo.Clear();
 }
 
-void LoLaPacketDriver::OnReceived()
+void LoLaPacketDriver::CheckForPendingAsync()
+{
+	//Asynchronously check for pending messages from the radio IC.
+	EventQueue.AppendEventToQueue(AsyncActionsEnum::Check);
+}
+
+void LoLaPacketDriver::ReceivePacket()
 {
 	if (!IncomingInfo.HasInfo())
 	{
@@ -114,6 +127,11 @@ bool LoLaPacketDriver::AllowedSend()
 		CanTransmit();
 }
 
+void LoLaPacketDriver::OnStart()
+{
+
+}
+
 //TODO:Store statistics metadata
 bool LoLaPacketDriver::SendPacket(ILoLaPacket* packet)
 {
@@ -140,4 +158,25 @@ uint32_t LoLaPacketDriver::GetLastValidReceivedMillis()
 int16_t LoLaPacketDriver::GetLastValidRSSI() 
 { 
 	return LastValidReceivedRssi;
+}
+
+void LoLaPacketDriver::OnAsyncEvent(const uint8_t actionCode)
+{
+	switch ((AsyncActionsEnum)actionCode)
+	{
+	case AsyncActionsEnum::Receive:
+		ReceivePacket();
+		break;
+	case AsyncActionsEnum::Check:
+		CheckForPending();
+		break;
+	case AsyncActionsEnum::BatteryAlarm:
+		OnBatteryAlarm();
+		break;
+	case AsyncActionsEnum::WakeUpTimer:
+		LoLaPacketDriver::OnWakeUpTimer();
+		break;
+	default:
+		break;
+	}
 }
