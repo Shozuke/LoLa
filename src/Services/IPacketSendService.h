@@ -14,12 +14,12 @@
 #define LOLA_SEND_SERVICE_DENIED_BACK_OFF_DURATION_MILLIS	2
 #define LOLA_SEND_SERVICE_DENIED_MAX_FAILS					3
 
-#define LOLA_SEND_SERVICE_SEND_TIMEOUT_DEFAULT_MILLIS		50
-#define LOLA_SEND_SERVICE_REPLY_TIMEOUT_DEFAULT_MILLIS		30
+#define LOLA_SEND_SERVICE_SEND_TIMEOUT_DEFAULT_MILLIS		(uint8_t)200
+#define LOLA_SEND_SERVICE_REPLY_TIMEOUT_DEFAULT_MILLIS		(uint8_t)250
 
-#define LOLA_SEND_SERVICE_REPLY_TIMEOUT_MILLIS				(LOLA_SEND_SERVICE_SEND_TIMEOUT_DEFAULT_MILLIS+LOLA_SEND_SERVICE_REPLY_TIMEOUT_DEFAULT_MILLIS)
+#define LOLA_SEND_SERVICE_REPLY_DEFAULT_TIMEOUT_MILLIS		(uint32_t)(LOLA_SEND_SERVICE_SEND_TIMEOUT_DEFAULT_MILLIS+LOLA_SEND_SERVICE_REPLY_TIMEOUT_DEFAULT_MILLIS)
 
-#define LOLA_SEND_SERVICE_BACK_OFF_DEFAULT_DURATION_MILLIS	200
+#define LOLA_SEND_SERVICE_BACK_OFF_DEFAULT_DURATION_MILLIS	(uint32_t)200
 
 class IPacketSendService : public ILoLaService
 {
@@ -41,6 +41,8 @@ private:
 	uint8_t SendTimeOutDuration = 0;
 	uint8_t AckTimeOutDuration = 0;
 
+	bool OverrideSendPermission = false;
+
 protected:
 	ILoLaPacket * Packet = nullptr;
 
@@ -61,11 +63,11 @@ protected:
 	virtual void OnSendRetrying() { }
 	virtual void OnPreSend() { }
 	virtual bool OnEnable() { return true; }
-	virtual void OnDisable() {	}
+	virtual void OnDisable() { }
 	virtual bool OnSetup()
 	{
 		//TODO: Get comms entropy source, abstracted.
-		randomSeed(analogRead(0));
+		//randomSeed(...);
 		return Packet != nullptr;
 	}
 
@@ -94,7 +96,7 @@ public:
 			break;
 		case SendStatusEnum::SendingPacket:
 			if (SendStartMillis == ILOLA_INVALID_MILLIS ||
-				((Millis() - SendStartMillis) > (SendStartMillis + SendTimeOutDuration)))
+				((Millis() - SendStartMillis) > SendTimeOutDuration))
 			{				
 				OnSendTimedOut();
 #ifdef DEBUG_PACKET_SERVICE
@@ -106,7 +108,7 @@ public:
 #endif
 				ClearSendRequest();
 			}
-			else if (!AllowedSend())
+			else if (!AllowedSend(OverrideSendPermission))
 			{
 				//Give an opportunity for the service to update the packet, if needed.
 				SetNextRunDelay(LOLA_SEND_SERVICE_DENIED_BACK_OFF_DURATION_MILLIS);
@@ -206,7 +208,7 @@ public:
 	}
 
 protected:
-	void RequestSendPacket(const uint8_t sendTimeOutDurationMillis = LOLA_SEND_SERVICE_SEND_TIMEOUT_DEFAULT_MILLIS,
+	void RequestSendPacket(const bool overrideSendPermission = false, const uint8_t sendTimeOutDurationMillis = LOLA_SEND_SERVICE_SEND_TIMEOUT_DEFAULT_MILLIS,
 		const uint8_t ackReplyTimeOutDurationMillis = LOLA_SEND_SERVICE_REPLY_TIMEOUT_DEFAULT_MILLIS)
 	{
 		if (HasSendPendingInternal())
@@ -214,6 +216,7 @@ protected:
 			SendStartMillis = Millis();
 			SendTimeOutDuration = sendTimeOutDurationMillis;
 			AckTimeOutDuration = ackReplyTimeOutDurationMillis;
+			OverrideSendPermission = overrideSendPermission;
 			SendStatus = SendStatusEnum::Requested;
 		}
 

@@ -117,15 +117,61 @@ LoLaServicesManager* LoLaPacketDriver::GetServices()
 	return &Services;
 }
 
-bool LoLaPacketDriver::AllowedSend()
+bool LoLaPacketDriver::HotAfterSend()
+{
+	if (LastSent != ILOLA_INVALID_MILLIS)
+	{
+		return GetMillis() - LastSent < LOLA_PACKET_MANAGER_SEND_MIN_BACK_OFF_DURATION_MILLIS;
+	}
+	return false;
+}
+
+bool LoLaPacketDriver::HotAfterReceive()
+{
+	if (LastValidReceived != ILOLA_INVALID_MILLIS)
+	{
+		return GetMillis() - LastValidReceived < LOLA_PACKET_MANAGER_SEND_AFTER_RECEIVE_MIN_BACK_OFF_DURATION_MILLIS;
+	}
+	return false;
+}
+
+bool LoLaPacketDriver::IsInSendSlot()
+{
+	if (LinkActive)
+	{
+		SendSlotElapsed = GetMillis() % DuplexPeriodMillis;
+
+		if (EvenSlot)
+		{
+			if (SendSlotElapsed < DuplexPeriodMillis)
+			{
+				return true;
+			}
+		}
+		else //The limbo of SendSlotElapsed == DuplexHalfPeriodMillis will always return false.
+		{
+			if (SendSlotElapsed > DuplexPeriodMillis)
+			{
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+bool LoLaPacketDriver::AllowedSend(const bool overridePermission)
 {
 	return Enabled &&
-		SendPermission &&
-		(GetMillis() - LastSent > LOLA_PACKET_MANAGER_SEND_MIN_BACK_OFF_DURATION_MILLIS)
-		&&
-		(GetMillis() - LastValidReceived > LOLA_PACKET_MANAGER_SEND_AFTER_RECEIVE_MIN_BACK_OFF_DURATION_MILLIS)
-		&&
-		CanTransmit();
+		!HotAfterSend() && //TODO: Deprecate and remove to maximize throughput when slot sending is working.
+		!HotAfterReceive() && //TODO: Deprecate and remove to maximize throughput when slot sending is working.
+		CanTransmit() &&
+		(overridePermission || IsInSendSlot());
+}
+
+void LoLaPacketDriver::SetCryptoSeedSource(ISeedSource* cryptoSeedSource)
+{
+	Sender.SetCryptoSeedSource(cryptoSeedSource);
+	Receiver.SetCryptoSeedSource(cryptoSeedSource);
 }
 
 void LoLaPacketDriver::OnStart()

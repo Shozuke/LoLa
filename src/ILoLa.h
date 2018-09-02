@@ -4,25 +4,31 @@
 #define _ILOLA_h
 
 #define DEBUG_LOLA
-#define MOCK_RADIO
-
-#define ILOLA_DEFAULT_CHANNEL 20
-
-#define ILOLA_DEFAULT_MIN_RSSI (int16_t(-100))
+//#define MOCK_RADIO
 
 #if !defined(UINT16_MAX) || !defined(INT16_MIN) || !defined(UINT32_MAX) || defined(UINT8_MAX)
 #include <stdint.h>
 #endif
 
-#define ILOLA_INVALID_RSSI		((int16_t)INT16_MIN)
-#define ILOLA_INVALID_MILLIS	((uint32_t)UINT32_MAX)
-#define ILOLA_INVALID_MICROS	ILOLA_INVALID_MILLIS
-#define ILOLA_INVALID_LATENCY	((uint16_t)UINT16_MAX)
+#define ILOLA_DEFAULT_CHANNEL				20
+
+#define ILOLA_DEFAULT_DUPLEX_PERIOD_MILLIS	10
+
+#define ILOLA_DEFAULT_MIN_RSSI				(int16_t(-100))
+
+#define ILOLA_INVALID_RSSI					((int16_t)INT16_MIN)
+#define ILOLA_INVALID_MILLIS				((uint32_t)UINT32_MAX)
+#define ILOLA_INVALID_MICROS				ILOLA_INVALID_MILLIS
+#define ILOLA_INVALID_LATENCY				((uint16_t)UINT16_MAX)
 
 #include <Arduino.h>
 #include <Packet\LoLaPacket.h>
 #include <Packet\LoLaPacketMap.h>
 #include <Crypto\UniqueIdProvider.h>
+#include <Crypto\ISeedSource.h>
+
+#include <ClockSource.h>
+
 
 
 class ILoLa
@@ -37,15 +43,21 @@ protected:
 	///Configurations
 	uint8_t TransmitPower = 0;
 	uint8_t CurrentChannel = ILOLA_DEFAULT_CHANNEL;
-	bool SendPermission = true;
 	bool Enabled = false;
+	uint8_t DuplexPeriodMillis = ILOLA_DEFAULT_DUPLEX_PERIOD_MILLIS;
+	///
+
+	///Status
 	bool LinkActive = false;
+	bool EvenSlot = false;
 	///
 
 	///Packet Mapper for known definitions.
 	LoLaPacketMap PacketMap;
 	///
 
+	///Synced clock
+	ClockSource SyncedClock;
 	///Unique Id
 	UniqueIdProvider IdProvider;
 	///
@@ -84,19 +96,34 @@ public:
 		LinkActive = active;
 	}
 
+	void SetDuplexSlot(const bool evenSlot)
+	{
+		EvenSlot = evenSlot;
+	}
+
 	bool IsLinkActive()
 	{
 		return LinkActive;
 	}
 
+	ClockSource* GetClockSource()
+	{
+		return &SyncedClock;
+	}
+
 	uint32_t GetTimeStamp()
 	{
-		return micros();
+		return SyncedClock.GetMicros();
 	}
 
 	uint32_t GetMillis()
 	{
 		return millis();
+	}
+
+	uint32_t GetMillisSync()
+	{
+		return SyncedClock.GetMillis();
 	}
 
 	uint32_t GetLastSentMillis()
@@ -155,10 +182,11 @@ protected:
 		return &CurrentChannel;
 	}
 
+
 public:
 	virtual bool SendPacket(ILoLaPacket* packet) { return false; }
 	virtual bool Setup() { return true; }
-	virtual bool AllowedSend() { return true; }
+	virtual bool AllowedSend(const bool overridePermission = false) { return true; }
 	virtual void OnStart() {}
 	virtual uint32_t GetLastValidReceivedMillis() { return LastReceived; }
 	virtual int16_t GetLastValidRSSI() { return LastReceivedRssi; }
@@ -166,6 +194,8 @@ public:
 	virtual uint8_t GetTransmitPowerMin() { return 0; }
 	virtual int16_t GetRSSIMax() { return 0; }
 	virtual int16_t GetRSSIMin() { return ILOLA_DEFAULT_MIN_RSSI; }
+
+	virtual void SetCryptoSeedSource(ISeedSource* cryptoSeedSource) {}
 
 	virtual void OnWakeUpTimer() {}
 	virtual void OnReceiveBegin(const uint8_t length, const  int16_t rssi) {}

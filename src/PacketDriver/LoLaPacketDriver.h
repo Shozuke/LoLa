@@ -42,6 +42,9 @@ private:
 		}
 	} IncomingInfo;
 
+	//Helper for IsInSendSlot().
+	uint32_t SendSlotElapsed;
+
 protected:
 	///Services that are served receiving packets.
 	LoLaServicesManager Services;
@@ -69,12 +72,13 @@ public:
 	LoLaServicesManager* GetServices();
 	uint32_t GetLastValidReceivedMillis();
 	int16_t GetLastValidRSSI();
+	void SetCryptoSeedSource(ISeedSource* cryptoSeedSource);
 
 	void OnAsyncEvent(const uint8_t actionCode);
 
 public:
 	virtual bool Setup();
-	virtual bool AllowedSend();
+	virtual bool AllowedSend(const bool overridePermission = false);
 	virtual bool SendPacket(ILoLaPacket* packet);
 
 	//Public calls for interrupts.
@@ -106,5 +110,11 @@ protected:
 
 protected:
 	void CheckForPendingAsync();
+
+private:
+	inline bool HotAfterSend();
+	inline bool HotAfterReceive();
+
+	inline bool IsInSendSlot();
 };
 #endif
