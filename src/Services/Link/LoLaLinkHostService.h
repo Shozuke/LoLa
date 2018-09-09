@@ -15,13 +15,14 @@ private:
 		SwitchOver = 2
 	};
 
-	//uint32_t ClockSyncHelper = 0;
+	LinkHostClockSyncer ClockSyncer;
+	ClockSyncResponseTransaction ClockSyncTransaction;
 
 public:
 	LoLaLinkHostService(Scheduler *scheduler, ILoLa* loLa)
 		: LoLaLinkService(scheduler, loLa)
 	{
-		LinkPMAC = LOLA_LINK_HOST_PMAC;
+		ClockSyncerPointer = &ClockSyncer;
 		loLa->SetDuplexSlot(false);
 	}
 protected:
@@ -39,31 +40,6 @@ protected:
 		CryptoSeed.SetBaseSeed(LinkPMAC, RemotePMAC, SessionId);
 	}
 
-	//virtual void OnClockReceived(const uint8_t sessionId, uint8_t* data)
-	//{
-	//	ClockSyncHelper = Millis();
-	//	ATUI.array[0] = data[0];
-	//	ATUI.array[1] = data[1];
-	//	ATUI.array[2] = data[2];
-	//	ATUI.array[3] = data[3];
-
-	//	ClockSyncHelper = Millis() - ATUI.uint;
-
-	//	if (ClockSyncHelper == 0)
-	//	{
-	//		//NTP reports clocks synced.
-	//		SyncedClockIsSynced = true;
-	//	}
-	//	else
-	//	{
-	//		//NTP reports clocks not synced.
-	//		SyncedClockIsSynced = false;
-	//	}
-
-	//	//PrepareClockSyncReply(ClockSyncHelper);
-	//	//RequestSendPacket();
-	//}
-
 	void OnLinkRequestReceived(const uint8_t sessionId, const uint32_t remotePMAC)
 	{
 		switch (LinkInfo.LinkState)
@@ -73,13 +49,10 @@ protected:
 				SessionId == sessionId &&
 				remotePMAC != LOLA_LINK_SERVICE_INVALID_PMAC)
 			{
-				//Here is where we have the choice to connect or not to this host.
+				//Here is where we have the choice to connect or not to this remote.
 				//TODO: PMAC Filtering?
-				//TODO: User UI choice?
 				RemotePMAC = remotePMAC;
-				ConnectingState = AwaitingConnectionEnum::SwitchOver;
-				ConnectingStateStartTime = Millis();
-				ResetLastSentTimeStamp();
+				SetConnectingState(AwaitingConnectionEnum::SwitchOver);
 				SetNextRunASAP();
 			}
 			else
@@ -113,6 +86,17 @@ protected:
 		{
 			UpdateLinkState(LoLaLinkInfo::LinkStateEnum::Connecting);
 		}
+		else if (LinkInfo.LinkState == LoLaLinkInfo::LinkStateEnum::Connecting)
+		{
+			if (ConnectingState == ConnectingStagesEnum::ChallengeSwitchOver ||
+				ConnectingState == ConnectingStagesEnum::ClockSyncSwitchOver ||
+				ConnectingState == ConnectingStagesEnum::LinkProtocolSwitchOver)
+			{
+				//We just need to advance the state.
+				SetConnectingState(ConnectingState + 1);
+				SetNextRunASAP();
+			}
+		}
 	}
 
 	void OnAwaitingConnection()
@@ -120,9 +104,7 @@ protected:
 		switch (ConnectingState)
 		{
 		case AwaitingConnectionEnum::Starting:
-			ConnectingState = AwaitingConnectionEnum::BroadcastingOpenSession;
-			ConnectingStateStartTime = Millis();
-			ResetLastSentTimeStamp();
+			SetConnectingState(AwaitingConnectionEnum::BroadcastingOpenSession);
 			SetNextRunASAP();
 			break;
 		case AwaitingConnectionEnum::BroadcastingOpenSession:
@@ -132,7 +114,6 @@ protected:
 			}
 			else if (GetElapsedSinceLastSent() > LOLA_LINK_SERVICE_LINK_RESEND_PERIOD)
 			{
-				TimeStampLastSent();
 				PreparePacketBroadcast();
 				RequestSendPacket(true);
 			}
@@ -149,7 +130,8 @@ protected:
 				UpdateLinkState(LoLaLinkInfo::LinkStateEnum::AwaitingSleeping);
 				SetNextRunASAP();
 
-			}else if (Millis() - ConnectingStateStartTime > LOLA_LINK_SERVICE_MAX_BEFORE_DISCONNECT)
+			}
+			else if (Millis() - ConnectingStateStartTime > LOLA_LINK_SERVICE_MAX_BEFORE_DISCONNECT)
 			{
 				//Go to sleep then wake up to trigger a full link reset.
 				UpdateLinkState(LoLaLinkInfo::LinkStateEnum::AwaitingSleeping);
@@ -163,29 +145,61 @@ protected:
 			}
 			else
 			{
-				SetNextRunDefault();
+				SetNextRunDelay(LOLA_LINK_SERVICE_FAST_CHECK_PERIOD);
 			}
 			break;
 		default:
-			ConnectingState = AwaitingConnectionEnum::BroadcastingOpenSession;
-			ConnectingStateStartTime = Millis();
+			SetConnectingState(0);
 			SetNextRunASAP();
 			break;
 		}
 	}
 
-	void OnConnecting()
+	//Possibly CPU intensive task.
+	bool IsChallengeComplete()
 	{
-		switch (ConnectingState)
+		//TODO:
+		//TODO: Reset challenge on ClearSession()
+
+		return true;
+	}
+
+	void OnClockSync()
+	{
+		if (ClockSyncTransaction.IsResultReady())
 		{
-		case ConnectingStagesEnum::ChallengeStage:
-			break;
-		case ConnectingStagesEnum::ClockSyncStage:
-			break;
-		case ConnectingStagesEnum::LinkProtocolStage:
-			break;
-		default:
-			break;
+			ClockSyncer.OnEstimationReceived(ClockSyncTransaction.GetResult());
+			PrepareClockSyncResponse(ClockSyncTransaction.GetId(), ClockSyncer.GetLastError());
+			ClockSyncTransaction.Reset();
+			RequestSendPacket(true);
+		}
+		else
+		{
+			SetNextRunDelay(LOLA_LINK_SERVICE_FAST_CHECK_PERIOD);
+		}
+	}
+
+	void OnClockSyncSwitchOver()
+	{
+		if (GetElapsedSinceLastSent() > LOLA_LINK_SERVICE_UNLINK_RESEND_PERIOD)
+		{
+			PrepareClockSyncAccepted();
+			RequestSendPacket(true);
+		}
+		else
+		{
+			SetNextRunDelay(LOLA_LINK_SERVICE_UNLINK_RESEND_PERIOD);
+		}
+	}
+
+	void OnClockSyncRequestReceived(const uint8_t requestId, const uint32_t estimatedMillis)
+	{
+		if (LinkInfo.LinkState == LoLaLinkInfo::LinkStateEnum::Connecting &&
+			ConnectingState == ConnectingStagesEnum::ClockSyncStage)
+		{
+			ClockSyncTransaction.SetResult(requestId, 
+				(int32_t)(ClockSyncer.GetMillisSynced(GetLoLa()->GetLastValidReceivedMillis()) - estimatedMillis));
+			SetNextRunASAP();
 		}
 	}
 
@@ -196,6 +210,7 @@ protected:
 		case LoLaLinkInfo::LinkStateEnum::AwaitingLink:
 		case LoLaLinkInfo::LinkStateEnum::AwaitingSleeping:
 			NewSession();
+			ClockSyncTransaction.Reset();
 		case LoLaLinkInfo::LinkStateEnum::Connecting:
 			ConnectingStateStartTime = Millis();
 			break;
@@ -208,19 +223,40 @@ private:
 	void NewSession()
 	{
 		ClearSession();
-		SessionId = 1 + random(0xFE);
+		SessionId = random(1, UINT8_MAX - 1);
+		ClockSyncer.Reset();
 	}
 
 	void PrepareLinkRequestAccepted()
 	{
-		PrepareBasePacketWithAck(LOLA_LINK_SERVICE_SUBHEADER_LINK_REQUEST_ACCEPTED);
+		PrepareSessionPacketWithAck(LOLA_LINK_SERVICE_SUBHEADER_LINK_REQUEST_ACCEPTED);
+		ATUI.uint = 0;
+		ArrayToPayload();
+	}
+
+	void PrepareClockSyncResponse(const uint8_t requestId, const uint32_t estimationError)
+	{
+		PacketHolder.SetDefinition(&LinkDefinition);
+		PacketHolder.SetId(requestId);
+		PacketHolder.GetPayload()[0] = LOLA_LINK_SERVICE_SUBHEADER_NTP_REPLY;
+
+		ATUI.uint = estimationError;
+		ArrayToPayload();
+	}
+
+	void PrepareClockSyncAccepted()
+	{
+		PacketHolder.SetDefinition(&LinkWithAckDefinition);
+		PacketHolder.SetId(SessionId);
+		PacketHolder.GetPayload()[0] = LOLA_LINK_SERVICE_SUBHEADER_NTP_ACCEPTED;
+
 		ATUI.uint = 0;
 		ArrayToPayload();
 	}
 
 	void PreparePacketBroadcast()
 	{
-		PrepareBasePacket(LOLA_LINK_SERVICE_SUBHEADER_HOST_BROADCAST);
+		PrepareSessionPacket(LOLA_LINK_SERVICE_SUBHEADER_HOST_BROADCAST);
 		ATUI.uint = LinkPMAC;
 		ArrayToPayload();
 	}

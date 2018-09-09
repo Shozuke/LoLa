@@ -5,6 +5,7 @@
 
 #define DEBUG_LOLA
 //#define MOCK_RADIO
+#define USE_TIME_SLOT
 
 #if !defined(UINT16_MAX) || !defined(INT16_MIN) || !defined(UINT32_MAX) || defined(UINT8_MAX)
 #include <stdint.h>
@@ -30,6 +31,11 @@
 #include <ClockSource.h>
 
 
+class ILinkActiveIndicator
+{
+public:
+	virtual bool HasLink() { return false; }
+};
 
 class ILoLa
 {
@@ -48,7 +54,7 @@ protected:
 	///
 
 	///Status
-	bool LinkActive = false;
+	ILinkActiveIndicator* LinkIndicator = nullptr;
 	bool EvenSlot = false;
 	///
 
@@ -91,9 +97,9 @@ public:
 		Enabled = false;
 	}
 
-	void SetLinkStatus(const bool active)
+	void SetLinkIndicator(ILinkActiveIndicator * indicator)
 	{
-		LinkActive = active;
+		LinkIndicator = indicator;
 	}
 
 	void SetDuplexSlot(const bool evenSlot)
@@ -103,7 +109,14 @@ public:
 
 	bool IsLinkActive()
 	{
-		return LinkActive;
+		if (LinkIndicator != nullptr)
+		{
+			return LinkIndicator->HasLink();
+		}
+		else 
+		{
+			return false;
+		}
 	}
 
 	ClockSource* GetClockSource()

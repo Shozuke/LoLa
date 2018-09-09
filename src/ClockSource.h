@@ -25,7 +25,7 @@ public:
 
 	void SetRandom()
 	{
-		SetMillis(random(UINT32_MAX));
+		Offset = random(UINT32_MAX);
 	}
 
 	void SetMillis(const uint32_t timeMillis)
@@ -34,9 +34,14 @@ public:
 		Offset = timeMillis - LastSetMillis;
 	}
 
-	void AddOffset(const int16_t offset)
+	void AddOffset(const int32_t offset)
 	{
-		Offset += offset;
+		Offset = Offset + offset;
+	}
+
+	uint32_t GetMillisSynced(const uint32_t sourceMillis)
+	{
+		return sourceMillis + Offset;
 	}
 
 	uint32_t GetMillis()
