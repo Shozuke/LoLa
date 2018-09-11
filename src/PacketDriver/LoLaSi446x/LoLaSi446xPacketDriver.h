@@ -36,6 +36,71 @@
 #define SI4463_MIN_RSSI (int16_t(-110))
 #define SI4463_MAX_RSSI (int16_t(-50))
 
+#define SI4463_MIN_CHANNEL 5
+#define SI4463_MAX_CHANNEL 120
+
+
+#define _TASK_OO_CALLBACKS
+#define PROCESS_EVENT_QUEUE_MAX_QUEUE_DEPTH 5
+
+class AsyncActor : Task
+{
+private:
+	RingBufCPP<void(*)(void), PROCESS_EVENT_QUEUE_MAX_QUEUE_DEPTH> EventQueue;
+
+	void(*GruntFunction)(void) = nullptr;
+
+public:
+	AsyncActor(Scheduler* scheduler)
+		: Task(0, TASK_FOREVER, scheduler, false)
+	{
+	}
+
+	void AppendEventToQueue(void(*callFunction)(void))
+	{
+		if (callFunction != nullptr)
+		{
+			EventQueue.addForce(callFunction);
+		}
+
+		if (!EventQueue.isEmpty())
+		{
+			enable();
+		}
+	}
+
+	bool OnEnable()
+	{
+		if (EventQueue.isEmpty())
+		{
+			disable();
+		}
+
+		return true;
+	}
+
+	void OnDisable()
+	{
+	}
+
+	bool Callback()
+	{
+		EventQueue.pull(GruntFunction);
+
+		if (GruntFunction != nullptr)
+		{
+			GruntFunction();
+		}
+
+		if (EventQueue.isEmpty())
+		{
+			disable();
+		}
+
+		return false;
+	}
+};
+
 class LoLaSi446xPacketDriver : public LoLaPacketDriver
 {
 protected:
@@ -59,11 +124,17 @@ public:
 	void OnReceiveBegin(const uint8_t length, const  int16_t rssi);
 	void OnReceivedFail(const int16_t rssi);
 
-	uint8_t GetTransmitPowerMax();
-	uint8_t GetTransmitPowerMin();
+	uint8_t GetTransmitPowerMax() const;
+	uint8_t GetTransmitPowerMin() const;
 
-	int16_t GetRSSIMax();
-	int16_t GetRSSIMin();
-	
+	int16_t GetRSSIMax() const;
+	int16_t GetRSSIMin() const;
+
+	uint8_t GetChannelMax() const;
+	uint8_t GetChannelMin() const;
+
+	void OnChannelUpdated();
+	void OnTransmitPowerUpdated();
+
 };
 #endif

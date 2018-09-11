@@ -50,7 +50,7 @@ protected:
 	uint8_t TransmitPower = 0;
 	uint8_t CurrentChannel = ILOLA_DEFAULT_CHANNEL;
 	bool Enabled = false;
-	uint8_t DuplexPeriodMillis = ILOLA_DEFAULT_DUPLEX_PERIOD_MILLIS;
+	const uint8_t DuplexPeriodMillis = ILOLA_DEFAULT_DUPLEX_PERIOD_MILLIS;
 	///
 
 	///Status
@@ -159,9 +159,11 @@ public:
 		return TransmitPower;
 	}
 
-	virtual bool SetTransmitPower(const uint8_t transmitPower)
+	bool SetTransmitPower(const uint8_t transmitPower)
 	{
 		TransmitPower = transmitPower;
+
+		OnTransmitPowerUpdated();
 
 		return true;
 	}
@@ -171,9 +173,11 @@ public:
 		return CurrentChannel;
 	}
 
-	virtual bool SetChannel(const int16_t channel)
+	bool SetChannel(const int16_t channel)
 	{
 		CurrentChannel = channel;
+
+		OnChannelUpdated();
 
 		return true;
 	}
@@ -203,10 +207,13 @@ public:
 	virtual void OnStart() {}
 	virtual uint32_t GetLastValidReceivedMillis() { return LastReceived; }
 	virtual int16_t GetLastValidRSSI() { return LastReceivedRssi; }
-	virtual uint8_t GetTransmitPowerMax() { return 0xFF; }
-	virtual uint8_t GetTransmitPowerMin() { return 0; }
-	virtual int16_t GetRSSIMax() { return 0; }
-	virtual int16_t GetRSSIMin() { return ILOLA_DEFAULT_MIN_RSSI; }
+
+	virtual uint8_t GetTransmitPowerMax() const { return 0xFF; }
+	virtual uint8_t GetTransmitPowerMin() const { return 0; }
+	virtual int16_t GetRSSIMax() const { return 0; }
+	virtual int16_t GetRSSIMin() const { return ILOLA_DEFAULT_MIN_RSSI; }
+	virtual uint8_t GetChannelMax() const { return 100; }
+	virtual uint8_t GetChannelMin() const { return 0; }
 
 	virtual void SetCryptoSeedSource(ISeedSource* cryptoSeedSource) {}
 
@@ -216,6 +223,10 @@ public:
 	virtual void OnReceived() {}
 	virtual void OnSentOk() {}
 	virtual void OnIncoming(const int16_t rssi) {}
+
+
+	virtual void OnChannelUpdated() {}
+	virtual void OnTransmitPowerUpdated() {}
 
 	virtual void OnBatteryAlarm() {}
 

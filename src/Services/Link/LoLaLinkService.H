@@ -22,6 +22,9 @@
 #include <Services\LoLaDiagnosticsService\LoLaDiagnosticsService.h>
 #endif
 
+//TODO: This class is too big, separate layers by funcionality.
+// Link Layer
+// ClockSyncLayer
 class LoLaLinkService : public IPacketSendService
 {
 private:
@@ -272,12 +275,7 @@ protected:
 
 	bool ShouldProcessReceived()
 	{
-		return true;
-		//return IPacketSendService::ShouldProcessReceived() ||
-		//	SessionId != LOLA_LINK_SERVICE_INVALID_SESSION ||
-		//	LinkInfo.LinkState == LoLaLinkInfo::LinkStateEnum::AwaitingLink ||
-		//	LinkInfo.LinkState == LoLaLinkInfo::LinkStateEnum::AwaitingSleeping ||
-		//	LinkInfo.LinkState == LoLaLinkInfo::LinkStateEnum::Connecting;
+		return IsSetupOk();
 	}
 
 	void UpdateLinkState(const LoLaLinkInfo::LinkStateEnum newState)
@@ -464,30 +462,6 @@ protected:
 		}
 	}
 
-	virtual void OnClockSyncWarning()
-	{
-	}
-
-	////Returns false if clock is out of the error margin.
-	//inline bool OnKeepingClockSynced()
-	//{
-	//	if (SyncedClock->GetLastSyncElapsedMillis() > LOLA_LINK_SERVICE_MAX_SYNC_ELAPSED)
-	//	{
-	//		//Too much time has elapsed since the last sync.
-	//		return false;
-	//	}
-	//	else if (SyncedClock->GetLastSyncElapsedMillis() > LOLA_LINK_SERVICE_MIN_ELAPSED_RESYNC)
-	//	{
-	//		//Remote should send a NTP refresh, otherwise Host will disconnect.
-	//		//TODO: Document in protocol.
-	//		OnClockSyncWarning();
-
-	//		return false;
-	//	}
-
-	//	return true;
-	//}
-
 	void OnKeepingConnected(const uint32_t elapsedSinceLastReceived)
 	{
 		if (LinkInfo.LinkState == LoLaLinkInfo::LinkStateEnum::Connected)
@@ -580,13 +554,6 @@ protected:
 		ArrayToPayload();
 	}
 
-	//void PrepareRssi()
-	//{
-	//	PrepareShortPacket(LOLA_LINK_SERVICE_SHORT_SUBHEADER_HELLO, SessionId);
-
-	//	//TODO: Add Rssi indicator to tail, for future auto-gain.
-	//}
-
 	void PrepareSessionPacketWithAck(const uint8_t subHeader)
 	{
 		PacketHolder.SetDefinition(&LinkWithAckDefinition);
@@ -636,7 +603,7 @@ private:
 
 				//TODO:
 				//SetNextRunDelay(LOLA_LINK_SERVICE_FAST_CHECK_PERIOD);
-				//We transition forward when we receive the approriate ack.
+				//We transition forward when we receive the appropriate ack.
 				break;
 			case ConnectingStagesEnum::ClockSyncStage:
 				if (ClockSyncerPointer->IsSynced())
@@ -652,7 +619,7 @@ private:
 			case ConnectingStagesEnum::ClockSyncSwitchOver:
 				OnClockSyncSwitchOver();
 				SetNextRunDelay(LOLA_LINK_SERVICE_LINK_CHECK_PERIOD);
-				//We transition forward when we receive the approriate ack.
+				//We transition forward when we receive the appropriate ack.
 				break;
 			case ConnectingStagesEnum::LinkProtocolStage:
 				
@@ -666,5 +633,37 @@ private:
 			}
 		}
 	}
+
+	//void PrepareRssi()
+	//{
+	//	PrepareShortPacket(LOLA_LINK_SERVICE_SHORT_SUBHEADER_HELLO, SessionId);
+
+	//	//TODO: Add Rssi indicator to tail, for future auto-gain.
+	//}
+
+	//TODO:
+	//virtual void OnClockSyncWarning()
+	//{
+	//}
+
+	////Returns false if clock is out of the error margin.
+	//inline bool OnKeepingClockSynced()
+	//{
+	//	if (SyncedClock->GetLastSyncElapsedMillis() > LOLA_LINK_SERVICE_MAX_SYNC_ELAPSED)
+	//	{
+	//		//Too much time has elapsed since the last sync.
+	//		return false;
+	//	}
+	//	else if (SyncedClock->GetLastSyncElapsedMillis() > LOLA_LINK_SERVICE_MIN_ELAPSED_RESYNC)
+	//	{
+	//		//Remote should send a NTP refresh, otherwise Host will disconnect.
+	//		//TODO: Document in protocol.
+	//		OnClockSyncWarning();
+
+	//		return false;
+	//	}
+
+	//	return true;
+	//}
 };
 #endif
