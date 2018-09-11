@@ -62,7 +62,10 @@ protected:
 		Receive,
 		Check,
 		BatteryAlarm,
-		WakeUpTimer
+		WakeUpTimer,
+		UpdateChannel,
+		UpdateTransmitPower,
+		Terminate
 	};
 
 	AsyncActionCallback EventQueue;
