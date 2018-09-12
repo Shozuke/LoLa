@@ -20,7 +20,6 @@ protected:
 	///
 
 	///Link health.
-	//uint64_t BytesProcessed = 0;
 	uint32_t PacketsProcessed = 0;
 	uint32_t PacketsFailed = 0;
 	///
@@ -38,8 +37,10 @@ protected:
 	ISeedSource* CryptoSeed = nullptr;
 	///
 
+	///Buffer content and size.
 	uint8_t BufferSize = 0;
 	ILoLaPacket* BufferPacket = nullptr;
+	///
 
 protected:
 	PacketDefinition * FindPacketDefinition(const uint8_t header)
@@ -63,8 +64,18 @@ public:
 
 		return PacketMap != nullptr;
 	}
-	
+
 public:
+	void Clear()
+	{
+		BufferSize = 0;
+	}
+
+	bool IsClear()
+	{
+		return BufferSize == 0;
+	}
+
 	uint8_t * GetBuffer()
 	{
 		return BufferPacket->GetRaw();
@@ -109,7 +120,5 @@ public:
 		serial->println();
 	}
 #endif // DEBUG_LOLA
-
 };
-
 #endif
