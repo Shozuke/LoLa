@@ -86,7 +86,7 @@ void LoLaPacketDriver::ReceivePacket()
 		{
 			if (Receiver.GetIncomingDefinition()->HasACK())
 			{
-				if (Sender.SendAck(Receiver.GetIncomingDefinition(), Receiver.GetIncomingPacket()->GetId()))
+				if (Sender.SendAck(Receiver.GetIncomingDefinition()->GetHeader(), Receiver.GetIncomingPacket()->GetId()))
 				{
 					if (Transmit())
 					{

@@ -49,7 +49,7 @@ public:
 		return false;
 	}
 
-	bool SendAck(PacketDefinition* payloadDefinition, const uint8_t id)
+	bool SendAck(const uint8_t header, const uint8_t id)
 	{
 		CalculatorCRC.Reset();
 
@@ -62,19 +62,11 @@ public:
 		CalculatorCRC.Update(PACKET_DEFINITION_ACK_HEADER);
 
 		//Payload, header and ID
-		BufferPacket->GetPayload()[0] = payloadDefinition->GetHeader();
-		CalculatorCRC.Update(payloadDefinition->GetHeader());
+		BufferPacket->GetPayload()[0] = header;
+		CalculatorCRC.Update(header);
 
-		if (payloadDefinition->HasId())
-		{
-			BufferPacket->GetPayload()[1] = id;
-			CalculatorCRC.Update(id);
-		}
-		else
-		{
-			BufferPacket->GetPayload()[1] = 0;
-			CalculatorCRC.Update(0);
-		}
+		BufferPacket->GetPayload()[1] = id;
+		CalculatorCRC.Update(id);
 
 		BufferPacket->GetRaw()[LOLA_PACKET_MACCRC_INDEX] = CalculatorCRC.GetCurrent();
 		BufferSize = AckDefinition->GetTotalSize();
