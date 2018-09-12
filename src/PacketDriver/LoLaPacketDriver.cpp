@@ -12,7 +12,7 @@ LoLaPacketDriver::LoLaPacketDriver(Scheduler* scheduler) : ILoLa(), EventQueue(s
 
 void LoLaPacketDriver::OnBatteryAlarm()
 {
-	EventQueue.AppendEventToQueue(AsyncActionsEnum::BatteryAlarm);
+	EventQueue.AppendEventToQueue(AsyncActionsEnum::FireBatteryAlarm);
 }
 
 void LoLaPacketDriver::OnSentOk()
@@ -22,7 +22,7 @@ void LoLaPacketDriver::OnSentOk()
 
 void LoLaPacketDriver::OnWakeUpTimer()
 {
-	EventQueue.AppendEventToQueue(AsyncActionsEnum::WakeUpTimer);
+	EventQueue.AppendEventToQueue(AsyncActionsEnum::FireWakeUpTimer);
 }
 
 //When RF detects incoming packet.
@@ -46,7 +46,7 @@ void LoLaPacketDriver::OnReceiveBegin(const uint8_t length, const int16_t rssi)
 	Receiver.SetBufferSize(length);
 
 	//Asynchronously process the received packet.
-	EventQueue.AppendEventToQueue(AsyncActionsEnum::Receive);
+	EventQueue.AppendEventToQueue(AsyncActionsEnum::ActionReceivePacket);
 }
 
 //When RF has received a garbled packet.
@@ -58,7 +58,7 @@ void LoLaPacketDriver::OnReceivedFail(const int16_t rssi)
 void LoLaPacketDriver::CheckForPendingAsync()
 {
 	//Asynchronously check for pending messages from the radio IC.
-	EventQueue.AppendEventToQueue(AsyncActionsEnum::Check);
+	EventQueue.AppendEventToQueue(AsyncActionsEnum::ActionCheckPending);
 }
 
 void LoLaPacketDriver::ReceivePacket()
@@ -236,17 +236,20 @@ void LoLaPacketDriver::OnAsyncEvent(const uint8_t actionCode)
 {
 	switch ((AsyncActionsEnum)actionCode)
 	{
-	case AsyncActionsEnum::Receive:
+	case AsyncActionsEnum::ActionReceivePacket:
 		ReceivePacket();
 		break;
-	case AsyncActionsEnum::Check:
-		CheckForPending();
+	case AsyncActionsEnum::ActionCheckPending:
 		break;
-	case AsyncActionsEnum::BatteryAlarm:
-		OnBatteryAlarm();
+	case AsyncActionsEnum::FireBatteryAlarm:
 		break;
-	case AsyncActionsEnum::WakeUpTimer:
-		LoLaPacketDriver::OnWakeUpTimer();
+	case AsyncActionsEnum::FireWakeUpTimer:
+		break;
+	case AsyncActionsEnum::ActionUpdateChannel:
+		break;
+	case AsyncActionsEnum::ActionUpdateTransmitPower:
+		break;
+	case AsyncActionsEnum::ActionTerminate:
 		break;
 	default:
 		break;

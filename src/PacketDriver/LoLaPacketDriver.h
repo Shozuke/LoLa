@@ -59,13 +59,13 @@ protected:
 	//Async handler for interrupt triggered events.
 	enum AsyncActionsEnum : uint8_t
 	{
-		Receive,
-		Check,
-		BatteryAlarm,
-		WakeUpTimer,
-		UpdateChannel,
-		UpdateTransmitPower,
-		Terminate
+		ActionReceivePacket,
+		ActionCheckPending,
+		FireBatteryAlarm,
+		FireWakeUpTimer,
+		ActionUpdateChannel,
+		ActionUpdateTransmitPower,
+		ActionTerminate
 	};
 
 	AsyncActionCallback EventQueue;
