@@ -148,12 +148,12 @@ bool LoLaPacketDriver::HotAfterReceive()
 
 void LoLaPacketDriver::WakeUpTimerFired()
 {
-
+	//TODO: What to do with this event?
 }
 
 void LoLaPacketDriver::BatteryAlarmFired()
 {
-
+	//TODO: Set up callback for health report?
 }
 
 void LoLaPacketDriver::SenderTransmit()
