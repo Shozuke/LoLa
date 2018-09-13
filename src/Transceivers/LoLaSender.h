@@ -17,6 +17,7 @@ public:
 	//Fast Ack, Nack, Ack with Id and Nack with Id packet sender, writes directly to output.
 	bool SendPacket(ILoLaPacket* transmitPacket)
 	{
+		Clear();
 		if (transmitPacket != nullptr && transmitPacket->GetDefinition() != nullptr)
 		{
 			CalculatorCRC.Reset();
@@ -42,15 +43,14 @@ public:
 			BufferSize = transmitPacket->GetDefinition()->GetTotalSize();
 			BufferPacket = transmitPacket;
 			PacketsProcessed++;
-
-			return true;
 		}
 
-		return false;
+		return !IsClear();
 	}
 
 	bool SendAck(const uint8_t header, const uint8_t id)
 	{
+		Clear();
 		CalculatorCRC.Reset();
 
 		//Crypto starts at the start of the hash.
@@ -73,7 +73,7 @@ public:
 
 		PacketsProcessed++;
 
-		return true;
+		return !IsClear();
 	}
 
 	bool Setup(LoLaPacketMap* packetMap)
