@@ -55,7 +55,7 @@ void LoLaPacketDriver::OnReceivedFail(const int16_t rssi)
 	IncomingInfo.Clear();
 }
 
-void LoLaPacketDriver::CheckForPendingAsync()
+void LoLaPacketDriver::CheckPendingAsync()
 {
 	//Asynchronously check for pending messages from the radio IC.
 	EventQueue.AppendEventToQueue(AsyncActionsEnum::ActionCheckPending);
@@ -76,27 +76,33 @@ void LoLaPacketDriver::ReceivePacket()
 		LastValidReceived = IncomingInfo.PacketTime;
 		LastValidReceivedRssi = IncomingInfo.PacketRSSI;
 		IncomingInfo.Clear();
-		//Is Ack
+		//Is Ack.
 		if (Receiver.GetIncomingDefinition()->GetHeader() == PACKET_DEFINITION_ACK_HEADER)
 		{
 			Services.ProcessAck(Receiver.GetIncomingPacket());
 		}
-		//Is packet
+		//Is packet.
 		else
 		{
 			if (Receiver.GetIncomingDefinition()->HasACK())
 			{
+				if (!Sender.IsClear())
+				{
+					//TODO: Missed outbound packet, store statistics.
+					Sender.Clear();
+				}
+
 				if (Sender.SendAck(Receiver.GetIncomingDefinition()->GetHeader(), Receiver.GetIncomingPacket()->GetId()))
 				{
-					if (Transmit())
-					{
-						LastSent = GetMillis();
-					}
-					else
-					{
-						//Transmit failed.
-						//TODO: Store statistics.
-					}
+					SenderTransmit();
+					//TODO: Send Ack in return send slot when we have link.
+				}
+				else
+				{
+					//TODO: Unable to send packet, log error.
+#ifdef DEBUG_LOLA
+					Serial.println("Failed to send ack packet.");
+#endif // DEBUG_LOLA
 				}
 			}
 			//Handle packet.
@@ -111,9 +117,6 @@ bool LoLaPacketDriver::Setup()
 	if (Receiver.Setup(&PacketMap) &&
 		Sender.Setup(&PacketMap))
 	{
-		//TODO: Get comms entropy source, abstracted.
-		//randomSeed(...);
-
 		SetupOk = true;
 	}
 
@@ -141,6 +144,36 @@ bool LoLaPacketDriver::HotAfterReceive()
 		return GetMillis() - LastValidReceived < LOLA_PACKET_MANAGER_SEND_AFTER_RECEIVE_MIN_BACK_OFF_DURATION_MILLIS;
 	}
 	return false;
+}
+
+void LoLaPacketDriver::WakeUpTimerFired()
+{
+
+}
+
+void LoLaPacketDriver::BatteryAlarmFired()
+{
+
+}
+
+void LoLaPacketDriver::SenderTransmit()
+{
+	if (!Sender.IsClear())
+	{
+		//Nothing to transmit.
+		return;
+	}
+
+	if (Transmit())
+	{
+		LastSent = GetMillis();
+		return true;
+	}
+	else
+	{
+		//Transmit failed.
+		//TODO: Store statistics.
+	}
 }
 
 bool LoLaPacketDriver::IsInSendSlot()
@@ -178,13 +211,13 @@ bool LoLaPacketDriver::AllowedSend(const bool overridePermission)
 	{
 		return CanTransmit() &&
 			(overridePermission || IsInSendSlot());
-}
-	else 
+	}
+	else
 	{
 		return CanTransmit() && overridePermission &&
 			!HotAfterSend() && !HotAfterReceive();
 	}
-	
+
 #else
 	return Enabled &&
 		!HotAfterSend() && !HotAfterReceive() &&
@@ -199,23 +232,15 @@ void LoLaPacketDriver::SetCryptoSeedSource(ISeedSource* cryptoSeedSource)
 	Receiver.SetCryptoSeedSource(cryptoSeedSource);
 }
 
-void LoLaPacketDriver::OnStart()
-{
-
-}
-
 //TODO:Store statistics metadata
 bool LoLaPacketDriver::SendPacket(ILoLaPacket* packet)
 {
 	if (SetupOk)
 	{
-		if (Sender.SendPacket(packet))
+		if (Sender.Send(packet))
 		{
-			if (Transmit())
-			{
-				LastSent = GetMillis();
-				return true;
-			}
+			SenderTransmit();
+			return true;
 		}
 	}
 
@@ -240,16 +265,22 @@ void LoLaPacketDriver::OnAsyncEvent(const uint8_t actionCode)
 		ReceivePacket();
 		break;
 	case AsyncActionsEnum::ActionCheckPending:
+		CheckPending();
 		break;
 	case AsyncActionsEnum::FireBatteryAlarm:
+		BatteryAlarmFired();
 		break;
 	case AsyncActionsEnum::FireWakeUpTimer:
+		WakeUpTimerFired();
 		break;
 	case AsyncActionsEnum::ActionUpdateChannel:
+		OnChannelUpdated();
 		break;
 	case AsyncActionsEnum::ActionUpdateTransmitPower:
+		OnTransmitPowerUpdated();
 		break;
 	case AsyncActionsEnum::ActionTerminate:
+		OnStop();
 		break;
 	default:
 		break;

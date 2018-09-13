@@ -49,9 +49,10 @@ protected:
 	bool Transmit();
 	bool CanTransmit();
 	void OnStart();
+	void OnStop();
 
 	void ReceivePacket();
-	void CheckForPending();
+	void CheckPending();
 
 private:
 	void DisableInterruptsInternal();
@@ -59,9 +60,6 @@ private:
 public:
 	LoLaSi446xPacketDriver(Scheduler* scheduler);
 	bool Setup();
-	bool DisableInterrupts();
-
-	void EnableInterrupts();
 
 	void OnReceiveBegin(const uint8_t length, const  int16_t rssi);
 	void OnReceivedFail(const int16_t rssi);

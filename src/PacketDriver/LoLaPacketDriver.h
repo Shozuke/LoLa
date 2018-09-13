@@ -79,18 +79,9 @@ public:
 
 	void OnAsyncEvent(const uint8_t actionCode);
 
-public:
 	virtual bool Setup();
 	virtual bool AllowedSend(const bool overridePermission = false);
 	virtual bool SendPacket(ILoLaPacket* packet);
-
-	//Public calls for interrupts.
-	virtual void OnIncoming(const int16_t rssi);
-	virtual void OnReceiveBegin(const uint8_t length, const int16_t rssi);
-	virtual void OnReceivedFail(const int16_t rssi);
-	virtual void OnSentOk();
-	virtual void OnBatteryAlarm();
-	virtual void OnWakeUpTimer();
 
 #ifdef DEBUG_LOLA
 	virtual void Debug(Stream* serial)
@@ -100,21 +91,33 @@ public:
 	}
 #endif
 
+public:
+	//Public virtual calls for interrupts.
+	virtual void OnIncoming(const int16_t rssi);
+	virtual void OnReceiveBegin(const uint8_t length, const int16_t rssi);
+	virtual void OnReceivedFail(const int16_t rssi);
+	virtual void OnSentOk();
+	virtual void OnBatteryAlarm();
+	virtual void OnWakeUpTimer();
+
 protected:
+	//Protected virtual calls for driver implementation.
 	virtual bool Transmit() { return false; }
 	virtual bool CanTransmit() { return true; }
-
 	virtual void ReceivePacket();
-	virtual void WakeUp() {};
-	virtual void BatteryAlarmed() {};
-	virtual void CheckForPending() {};
-
-	virtual void OnStart();
+	virtual void CheckPending() {}
+	virtual void OnStart() {}
+	virtual void OnStop() {}
 
 protected:
-	void CheckForPendingAsync();
+	void CheckPendingAsync();
 
 private:
+	void WakeUpTimerFired();
+	void BatteryAlarmFired();
+
+	void SenderTransmit();
+
 	inline bool HotAfterSend();
 	inline bool HotAfterReceive();
 

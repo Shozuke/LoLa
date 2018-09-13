@@ -3,11 +3,8 @@
 
 #include <PacketDriver\LoLaSi446x\LoLaSi446xPacketDriver.h>
 
-#define UNINITIALIZED_INTERRUPT 0XFF
-
 //Static handlers for interrupts.
 LoLaSi446xPacketDriver* StaticSi446LoLa = nullptr;
-volatile uint8_t InterruptStatus = UNINITIALIZED_INTERRUPT;
 volatile bool Receiving = false;
 
 void SI446X_CB_RXCOMPLETE(uint8_t length, int16_t rssi)
@@ -48,60 +45,22 @@ LoLaSi446xPacketDriver::LoLaSi446xPacketDriver(Scheduler* scheduler)
 	StaticSi446LoLa = this;
 }
 
-void LoLaSi446xPacketDriver::CheckForPending()
+void LoLaSi446xPacketDriver::CheckPending()
 {	
 #ifndef MOCK_RADIO
 	Si446x_SERVICE();
 #endif
-	LoLaPacketDriver::CheckForPending();
 }
 
-bool LoLaSi446xPacketDriver::DisableInterrupts()
-{
-	if (!Receiving)
-	{
-#ifndef MOCK_RADIO
-		InterruptStatus = Si446x_irq_off();
-#endif
-		return true;
-	}
-
-	return false;
-}
-
-void LoLaSi446xPacketDriver::DisableInterruptsInternal()
-{
-#ifndef MOCK_RADIO
-	InterruptStatus = Si446x_irq_off();
-#endif
-}
-
-void LoLaSi446xPacketDriver::EnableInterrupts()
-{
-#ifndef MOCK_RADIO
-	if (InterruptStatus != UNINITIALIZED_INTERRUPT)
-	{
-		Si446x_irq_on(InterruptStatus);
-	}
-	InterruptStatus = UNINITIALIZED_INTERRUPT;
-#endif
-	CheckForPendingAsync(); //Take this chance to make sure there are no pending interrupts.
-}
-
-bool LoLaSi446xPacketDriver::Transmit()
+void LoLaSi446xPacketDriver::Transmit()
 {
 #ifdef MOCK_RADIO
 	delayMicroseconds(500);
 	return true;
 #else
 	bool Result = false;
-	if (Sender.GetBufferSize() > 0)
-	{
-		//On success(has begun transmitting).
-		Result = Si446x_TX(Sender.GetBuffer(), Sender.GetBufferSize(), CurrentChannel, SI446X_STATE_RX);
-	}
-
-	return Result;
+	//On success(has begun transmitting).
+	return Si446x_TX(Sender.GetBuffer(), Sender.GetBufferSize(), CurrentChannel, SI446X_STATE_RX);
 #endif
 }
 
@@ -116,45 +75,56 @@ bool LoLaSi446xPacketDriver::CanTransmit()
 
 void LoLaSi446xPacketDriver::OnReceiveBegin(const uint8_t length, const int16_t rssi)
 {
-	//Disable Si interrupts until we have processed the received packet.
-	DisableInterruptsInternal();
-
 	LoLaPacketDriver::OnReceiveBegin(length, rssi);
+
+	//Disable Si interrupts until we have processed the received packet.
+#ifndef MOCK_RADIO
+	Si446x_irq_off();
+#endif
 }
 
 void LoLaSi446xPacketDriver::ReceivePacket()
 {
 #ifndef MOCK_RADIO
 	Si446x_read(Receiver.GetBuffer(), Receiver.GetBufferSize());
-	Si446x_RX(CurrentChannel);
 #endif
 
 	LoLaPacketDriver::ReceivePacket();
-	EnableInterrupts();
+#ifndef MOCK_RADIO
+	Si446x_irq_on(true);
+#endif
+	CheckPendingAsync(); //Take this chance to make sure there are no pending interrupts.
 }
 
 void LoLaSi446xPacketDriver::OnReceivedFail(const int16_t rssi)
 {
 	LoLaPacketDriver::OnReceivedFail(rssi);
-	EnableInterrupts();
+#ifndef MOCK_RADIO
+	Si446x_irq_on(true);
+#endif
+	CheckPendingAsync();
 }
 
 void LoLaSi446xPacketDriver::OnChannelUpdated()
 {
-
+	Si446x_RX(CurrentChannel);
 }
 
 void LoLaSi446xPacketDriver::OnTransmitPowerUpdated() 
 {
+	Si446x_setTxPower(TransmitPower);
+}
 
+void LoLaSi446xPacketDriver::OnStop()
+{
+	Si446x_sleep();
 }
 
 void LoLaSi446xPacketDriver::OnStart()
 {
 	LoLaPacketDriver::OnStart();
 #ifndef MOCK_RADIO
-	InterruptStatus = UNINITIALIZED_INTERRUPT;
-	CheckForPendingAsync();
+	CheckPending();
 	Si446x_RX(CurrentChannel);
 #endif
 }
@@ -214,7 +184,7 @@ bool LoLaSi446xPacketDriver::Setup()
 			Si446x_setLowBatt(3200); // Set low battery voltage to 3200mV
 			Si446x_setupWUT(1, 8192, 0, SI446X_WUT_BATT); // Run check battery every 2 seconds.
 
-			CheckForPending();
+			CheckPending();
 
 			Si446x_sleep();
 #ifdef DEBUG_LOLA
