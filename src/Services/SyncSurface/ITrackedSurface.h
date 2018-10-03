@@ -9,13 +9,9 @@
 
 #define DEBUG_BIT_TRACKER
 
-#define SYNC_SURFACE_BLOCK_SIZE 4 //4 bytes per block, enough for a 32 bit value (uint32_t, int32_t);
+#define SYNC_SURFACE_BLOCK_SIZE					4 //4 bytes per block, enough for a 32 bit value (uint32_t, int32_t);
 
-#define SYNC_SURFACE_8_SIZE		32	//8*LOLA_SYNC_SURFACE_BLOCK_SIZE
-#define SYNC_SURFACE_16_SIZE	64	//16*LOLA_SYNC_SURFACE_BLOCK_SIZE
-#define SYNC_SURFACE_32_SIZE	128	//32*LOLA_SYNC_SURFACE_BLOCK_SIZE
-#define SYNC_SURFACE_64_SIZE	256	//64*LOLA_SYNC_SURFACE_BLOCK_SIZE
-#define SYNC_SURFACE_128_SIZE	512	//128*LOLA_SYNC_SURFACE_BLOCK_SIZE
+#define SYNC_SURFACE_PACKET_DEFINITION_COUNT	2
 
 class ITrackedSurface
 {
@@ -83,16 +79,6 @@ public:
 	virtual IBitTracker* GetTracker() { return nullptr; };
 	inline virtual uint8_t GetBlockCount() { return 0; };
 	virtual void SetAllPending() {};
-
-
-protected:
-	//Helper methods.
-	inline uint16_t Get8(const uint8_t blockIndex, const uint8_t offset = 0);
-	inline void Set8(const uint8_t blockIndex, const uint8_t value, const uint8_t offset = 0);
-	inline uint16_t Get16(const uint8_t blockIndex, const uint8_t offset = 0);
-	inline void Set16(const uint8_t blockIndex, const uint16_t value, const uint8_t offset = 0);
-	inline uint32_t Get32(const uint8_t blockIndex);
-	inline void Set32(const uint8_t blockIndex, const uint32_t value);
 
 public:
 #ifdef DEBUG_BIT_TRACKER

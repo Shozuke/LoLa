@@ -30,10 +30,7 @@ void LoLaPacketDriver::OnIncoming(const int16_t rssi)
 {
 	LastReceived = GetMillis();
 	LastReceivedRssi = rssi;
-	if (!IncomingInfo.HasInfo())
-	{
-		IncomingInfo.SetInfo(LastReceived, LastReceivedRssi);
-	}
+	IncomingInfo.SetInfo(LastReceived, LastReceivedRssi);
 }
 
 //When RF has packet to read.
@@ -72,9 +69,9 @@ void LoLaPacketDriver::ReceivePacket()
 	{
 	}
 	else
-	{	//Packet received Ok, let's update that info really quick.
-		LastValidReceived = IncomingInfo.PacketTime;
-		LastValidReceivedRssi = IncomingInfo.PacketRSSI;
+	{	//Packet received Ok, let's commit that info really quick.
+		LastValidReceived = IncomingInfo.GetPacketTime();
+		LastValidReceivedRssi = IncomingInfo.GetPacketRSSI();
 		IncomingInfo.Clear();
 		//Is Ack.
 		if (Receiver.GetIncomingDefinition()->GetHeader() == PACKET_DEFINITION_ACK_HEADER)

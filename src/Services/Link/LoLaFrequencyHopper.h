@@ -83,7 +83,7 @@ public:
 
 	bool Callback()
 	{
-		GetLoLa()->SetChannel(GetHopChannel(MillisSync));
+		GetLoLa()->SetChannel(GetHopChannel(MillisSync()));
 
 		//Instead of relying purely on the scheduler, we adapt to any timming mis-sync on every hop.
 		SetNextRunDelay(GetNextSwitchOverDelay(MillisSync()));
@@ -106,9 +106,10 @@ private:
 	{
 		for (uint8_t i = 0; i < HopPeriod; i++)
 		{
-			if (millisSync + i % HopPeriod == 0)
+			//We search backwards because for most of the time, the first iteration will return a result.
+			if ((millisSync + HopPeriod - i) % HopPeriod == 0)
 			{
-				return i;
+				return HopPeriod - i;
 			}
 		}
 
@@ -129,10 +130,7 @@ private:
 		//Ooooooor, we can use the synced seed as a common source for a pseudo-random distribution.
 		Hasher.Reset(TokenCachedHash);
 
-		Hasher.Update(HopSeed.array[0]);
-		Hasher.Update(HopSeed.array[1]);
-		Hasher.Update(HopSeed.array[2]);
-		Hasher.Update(HopSeed.array[3]);
+		Hasher.Update32(HopSeed);
 
 		return map(Hasher.GetCurrent(), 0, UINT8_MAX, ChannelMin, ChannelMax);
 	}

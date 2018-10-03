@@ -12,58 +12,51 @@
 
 #define ABSTRACT_SURFACE_DEFAULT_HASH 0
 
-#define ABSTRACT_SURFACE_MAX_ELAPSED_BEFORE_SYNC_RESTART	1000
-#define ABSTRACT_SURFACE_MAX_ELAPSED_BEFORE_RESYNC_DEMOTE	500
-#define ABSTRACT_SURFACE_SYNC_REPLY_TIMEOUT					200
-#define ABSTRACT_SURFACE_SYNC_SEND_COALESCE_PERIOD			50
+#define ABSTRACT_SURFACE_MAX_ELAPSED_DATA_SYNC_LOST			(uint32_t)1000
 
-#define ABSTRACT_SURFACE_SYNC_PERSISTANCE_COUNT				5
-#define ABSTRACT_SURFACE_SYNC_KEEP_ALIVE_MILLIS				3000
-
-#define ABSTRACT_SURFACE_SYNC_REPLY_CHECK_PERIOD			(ABSTRACT_SURFACE_SYNC_REPLY_TIMEOUT/(ABSTRACT_SURFACE_SYNC_PERSISTANCE_COUNT/2))
-#define ABSTRACT_SURFACE_SYNC_RETRY_PERIDO					(ABSTRACT_SURFACE_SYNC_REPLY_TIMEOUT/ABSTRACT_SURFACE_SYNC_PERSISTANCE_COUNT)
-#define ABSTRACT_SURFACE_SYNC_PERSISTANCE_PERIOD			(ABSTRACT_SURFACE_SYNC_KEEP_ALIVE_MILLIS/ABSTRACT_SURFACE_SYNC_PERSISTANCE_COUNT)
+#define ABSTRACT_SURFACE_SYNC_REPLY_CHECK_PERIOD			(uint32_t)50
+#define ABSTRACT_SURFACE_SYNC_RETRY_PERIDO					(ABSTRACT_SURFACE_SYNC_REPLY_CHECK_PERIOD*2)
 
 class AbstractSync : public IPacketSendService
 {
 private:
 	uint8_t LastRemoteHash = ABSTRACT_SURFACE_DEFAULT_HASH;
-	uint32_t LastRemoteHashReceived = ILOLA_INVALID_MILLIS;
+	bool RemoteHashIsSet = false;
 
 	uint32_t StateStartTime = ILOLA_INVALID_MILLIS;
-	uint32_t SubStateStart = ILOLA_INVALID_MILLIS;
+
+	uint32_t LastSent = ILOLA_INVALID_MILLIS;
 
 protected:
 	enum SyncStateEnum : uint8_t
 	{
-		Starting = 0,
-		WaitingForTrigger = 1,
-		FullSync = 2,
-		Synced = 3,
-		Resync = 4,
-		Disabled = 5
-	};
+		WaitingForServiceDiscovery = 0,
+		Syncing = 1,
+		Synced = 2,
+		Disabled = 3
+	} SyncState = SyncStateEnum::Disabled;
 
 	ITrackedSurface * TrackedSurface = nullptr;
 
-	SyncStateEnum SyncState = SyncStateEnum::Disabled;
-	TemplateLoLaPacket<LOLA_PACKET_SLIM_SIZE> PacketHolder;
-
 protected:
-	virtual void OnWaitingForTriggerService() {}
+	virtual void OnWaitingForServiceDiscovery() {}
 	virtual void OnSyncActive() {}
-	virtual void OnSyncedService() {}
 
 	virtual void OnSurfaceDataChanged() {}
 	virtual void OnStateUpdated(const SyncStateEnum newState) {}
 
 public:
-	AbstractSync(Scheduler* scheduler, const uint16_t period, ILoLa* loLa, ITrackedSurface* trackedSurface)
-		: IPacketSendService(scheduler, period, loLa, &PacketHolder)
+	AbstractSync(Scheduler* scheduler, const uint16_t period, ILoLa* loLa, ITrackedSurface* trackedSurface, ILoLaPacket* packetHolder)
+		: IPacketSendService(scheduler, period, loLa, packetHolder)
 	{
 		TrackedSurface = trackedSurface;
-		
+
 		SyncState = SyncStateEnum::Disabled;
+	}
+
+	bool OnEnable()
+	{
+		return true;
 	}
 
 	ITrackedSurface* GetSurface()
@@ -73,14 +66,12 @@ public:
 
 	void OnLinkEstablished()
 	{
-		Enable();
-		SetNextRunASAP();
-		UpdateState(SyncStateEnum::Starting);
+		UpdateSyncState(SyncStateEnum::WaitingForServiceDiscovery);
 	}
 
 	void OnLinkLost()
 	{
-		UpdateState(SyncStateEnum::Disabled);
+		UpdateSyncState(SyncStateEnum::Disabled);
 	}
 
 	bool IsSynced()
@@ -88,19 +79,14 @@ public:
 		return SyncState == SyncStateEnum::Synced;
 	}
 
-	bool IsSyncEnabled()
-	{
-		return SyncState != SyncStateEnum::Disabled;
-	}
-
-	bool IsSyncing()
-	{
-		return SyncState == SyncStateEnum::Resync || SyncState == SyncStateEnum::FullSync;
-	}
-
 	void SurfaceDataChangedEvent(uint8_t param)
 	{
-		OnSurfaceDataChanged();
+		InvalidateLocalHash();
+
+		if (SyncState == SyncStateEnum::Synced)
+		{
+			UpdateSyncState(SyncStateEnum::Syncing);
+		}
 	}
 
 	void NotifyDataChanged()
@@ -112,54 +98,37 @@ public:
 	}
 
 protected:
-	virtual bool OnEnable()
+	void OnSendFailed()
 	{
-		return true;
+		//In case the send fails, this prevents from immediate resending.
+		SetNextRunDelay(ABSTRACT_SURFACE_SYNC_RETRY_PERIDO);
 	}
 
 	void SetRemoteHash(const uint8_t remoteHash)
 	{
-		LastRemoteHashReceived = Millis();
-		if (LastRemoteHashReceived == ILOLA_INVALID_MILLIS)
-		{
-			LastRemoteHashReceived--;
-		}
+		RemoteHashIsSet = true;
 		LastRemoteHash = remoteHash;
-	}
-
-	bool IsLastRemoteHashFresh()
-	{
-		if (LastRemoteHashReceived != ILOLA_INVALID_MILLIS)
-		{
-			return (Millis() - LastRemoteHashReceived < ABSTRACT_SURFACE_SYNC_PERSISTANCE_PERIOD);
-		}
-		return true;
-	}
-
-	bool IsLastRemoteHashStale()
-	{
-		if (LastRemoteHashReceived != ILOLA_INVALID_MILLIS)
-		{
-			return (Millis() - LastRemoteHashReceived > ABSTRACT_SURFACE_SYNC_KEEP_ALIVE_MILLIS);
-		}
-		return true;
 	}
 
 	inline bool HasRemoteHash()
 	{
-		return LastRemoteHashReceived != ILOLA_INVALID_MILLIS;
+		return RemoteHashIsSet;
 	}
 
 	bool HashesMatch()
 	{
-#ifdef DEBUG_LOLA
+#if defined(DEBUG_LOLA) && defined(LOLA_SYNC_FULL_DEBUG)
 		if (!HasRemoteHash())
 		{
 			Serial.println(F("No Remote hash"));
 		}
-		if (GetLocalHash() != LastRemoteHash)
+		else if (GetLocalHash() != LastRemoteHash)
 		{
 			Serial.println(F("Hash mismatch"));
+		}
+		else 
+		{
+			Serial.println(F("Hash match"));
 		}
 #endif
 		return (HasRemoteHash() &&
@@ -184,29 +153,7 @@ protected:
 	inline void InvalidateRemoteHash()
 	{
 		LastRemoteHash = ABSTRACT_SURFACE_DEFAULT_HASH;
-		LastRemoteHashReceived = ILOLA_INVALID_MILLIS;
-	}
-
-	inline uint32_t GetSubStateElapsed()
-	{
-		if (SubStateStart != ILOLA_INVALID_MILLIS)
-		{
-			return Millis() - SubStateStart;
-		}
-		else
-		{
-			return 0;
-		}
-	}
-
-	void StampSubStateStart(const int16_t offset = 0)
-	{
-		SubStateStart = Millis() + offset;
-	}
-
-	void ResetSubStateStart()
-	{
-		SubStateStart = ILOLA_INVALID_MILLIS;
+		RemoteHashIsSet = false;
 	}
 
 	uint32_t GetElapsedSinceStateStart()
@@ -221,61 +168,61 @@ protected:
 		}
 	}
 
-	void UpdateState(const SyncStateEnum newState)
+	void ResetLastSentTimeStamp()
+	{
+		LastSent = ILOLA_INVALID_MILLIS;
+	}
+
+	uint32_t GetElapsedSinceLastSent()
+	{
+		if (LastSent == ILOLA_INVALID_MILLIS)
+		{
+			return ILOLA_INVALID_MILLIS;
+		}
+		else
+		{
+			return Millis() - LastSent;
+		}
+	}
+
+	void UpdateSyncState(const SyncStateEnum newState)
 	{
 		if (SyncState != newState)
 		{
 			StateStartTime = Millis();
-
+			ResetLastSentTimeStamp();
 			SetNextRunASAP();
 
-			if (SyncState == SyncStateEnum::Disabled &&
-				newState != SyncStateEnum::Disabled)
-			{
-				Enable();
-			}
+			Enable(); //Make sure we are running.
 
 #if defined(DEBUG_LOLA) && defined(LOLA_SYNC_FULL_DEBUG)
-			Serial.print(Millis());
+			Serial.print(GetLoLa()->GetMillisSync());
 			Serial.print(F(": Updated State to "));
 #endif
+
 			switch (newState)
 			{
-			case SyncStateEnum::WaitingForTrigger:
+			case SyncStateEnum::WaitingForServiceDiscovery:
 #if defined(DEBUG_LOLA) && defined(LOLA_SYNC_FULL_DEBUG)
-				Serial.println(F("WaitingForTrigger"));
+				Serial.println(F("WaitingForServiceDiscovery"));
 #endif
 				break;
-			case SyncStateEnum::Starting:
-#if defined(DEBUG_LOLA) && defined(LOLA_SYNC_FULL_DEBUG)
-				Serial.println(F("Starting"));
-#endif
-				InvalidateLocalHash();
-				break;
-			case SyncStateEnum::FullSync:
+			case SyncStateEnum::Syncing:
 #if defined(DEBUG_LOLA) && defined(LOLA_SYNC_FULL_DEBUG)
 				Serial.println(F("FullSync"));
 #endif
-				InvalidateRemoteHash();
-				TrackedSurface->GetTracker()->SetAll();
-				Enable();
+				InvalidateLocalHash();
 				break;
 			case SyncStateEnum::Synced:
 #if defined(DEBUG_LOLA) && defined(LOLA_SYNC_FULL_DEBUG)
 				Serial.println(F("Synced"));
-				TrackedSurface->GetTracker()->ClearAll();
 #endif
-				break;
-			case SyncStateEnum::Resync:
-#if defined(DEBUG_LOLA) && defined(LOLA_SYNC_FULL_DEBUG)
-				Serial.println(F("Resync"));
-#endif
+				InvalidateLocalHash();
 				break;
 			case SyncStateEnum::Disabled:
 #if defined(DEBUG_LOLA) && defined(LOLA_SYNC_FULL_DEBUG)
 				Serial.println(F("Disabled"));
 #endif
-				Disable();
 				break;
 			default:
 				break;
@@ -306,23 +253,24 @@ protected:
 
 		switch (SyncState)
 		{
-		case SyncStateEnum::Starting:
-			SetNextRunASAP();
-			UpdateState(SyncStateEnum::WaitingForTrigger);
+		case SyncStateEnum::WaitingForServiceDiscovery:
+			OnWaitingForServiceDiscovery();
 			break;
-		case SyncStateEnum::WaitingForTrigger:
-			OnWaitingForTriggerService();
-			break;
-		case SyncStateEnum::Resync:
-		case SyncStateEnum::FullSync:
+		case SyncStateEnum::Syncing:
 			OnSyncActive();
 			break;
 		case SyncStateEnum::Synced:
-			OnSyncedService();
+			if (TrackedSurface->GetTracker()->HasSet())
+			{
+				UpdateSyncState(SyncStateEnum::Syncing);
+			}
+			else
+			{
+				SetNextRunLong();
+			}
 			break;
 		case SyncStateEnum::Disabled:
 		default:
-			SyncState = SyncStateEnum::Disabled;
 			Disable();
 			break;
 		}

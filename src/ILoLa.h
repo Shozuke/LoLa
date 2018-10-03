@@ -11,7 +11,7 @@
 #include <stdint.h>
 #endif
 
-#define ILOLA_DEFAULT_CHANNEL				20
+#define ILOLA_DEFAULT_CHANNEL				1
 
 #define ILOLA_DEFAULT_DUPLEX_PERIOD_MILLIS	10
 
@@ -44,6 +44,9 @@ protected:
 	volatile uint32_t LastSent = ILOLA_INVALID_MILLIS;
 	volatile uint32_t LastReceived = ILOLA_INVALID_MILLIS;
 	volatile int16_t LastReceivedRssi = ILOLA_INVALID_RSSI;
+
+	uint32_t LastValidReceived = ILOLA_INVALID_MILLIS;
+	int16_t LastValidReceivedRssi = ILOLA_INVALID_RSSI;
 	///
 
 	///Configurations
@@ -158,6 +161,16 @@ public:
 		return LastReceivedRssi;
 	}
 
+	uint32_t GetLastValidReceivedMillis()
+	{
+		return  LastValidReceived;
+	}
+
+	int16_t GetLastValidRSSI()
+	{
+		return LastValidReceivedRssi;
+	}
+
 	uint8_t GetTransmitPower()
 	{
 		return TransmitPower;
@@ -210,8 +223,6 @@ public:
 	virtual bool AllowedSend(const bool overridePermission = false) { return true; }
 	virtual void OnStart() {}
 	virtual void OnStop() {}
-	virtual uint32_t GetLastValidReceivedMillis() { return LastReceived; }
-	virtual int16_t GetLastValidRSSI() { return LastReceivedRssi; }
 
 	virtual uint8_t GetTransmitPowerMax() const { return 0xFF; }
 	virtual uint8_t GetTransmitPowerMin() const { return 0; }
