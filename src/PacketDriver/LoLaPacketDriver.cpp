@@ -164,7 +164,7 @@ void LoLaPacketDriver::SenderTransmit()
 	if (Transmit())
 	{
 		LastSent = GetMillis();
-		return true;
+		return;
 	}
 	else
 	{
@@ -234,7 +234,7 @@ bool LoLaPacketDriver::SendPacket(ILoLaPacket* packet)
 {
 	if (SetupOk)
 	{
-		if (Sender.Send(packet))
+		if (Sender.SendPacket(packet))
 		{
 			SenderTransmit();
 			return true;
@@ -242,16 +242,6 @@ bool LoLaPacketDriver::SendPacket(ILoLaPacket* packet)
 	}
 
 	return false;
-}
-
-uint32_t LoLaPacketDriver::GetLastValidReceivedMillis()
-{
-	return  LastValidReceived;
-}
-
-int16_t LoLaPacketDriver::GetLastValidRSSI()
-{
-	return LastValidReceivedRssi;
 }
 
 void LoLaPacketDriver::OnAsyncEvent(const uint8_t actionCode)

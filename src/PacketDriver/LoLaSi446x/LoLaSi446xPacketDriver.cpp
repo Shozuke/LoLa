@@ -52,7 +52,7 @@ void LoLaSi446xPacketDriver::CheckPending()
 #endif
 }
 
-void LoLaSi446xPacketDriver::Transmit()
+bool LoLaSi446xPacketDriver::Transmit()
 {
 #ifdef MOCK_RADIO
 	delayMicroseconds(500);
