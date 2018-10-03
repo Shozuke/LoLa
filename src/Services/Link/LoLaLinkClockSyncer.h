@@ -5,14 +5,22 @@
 
 #include <ClockSource.h>
 
-#define CLOCK_SYNC_REQUEST_TRANSACTION_MAX_DURATION_MILLIS 300
+#define CLOCK_SYNC_REQUEST_TRANSACTION_MAX_DURATION_MILLIS	(uint32_t)300
 #define CLOCK_SYNC_GOOD_ENOUGH_COUNT						2
 
-#define CLOCK_SYNC_TUNE_ELAPSED_MILLIS						10000
-#define CLOCK_SYNC_MAX_TUNE_ERROR							5
-#define CLOCK_SYNC_TUNE_REMOTE_PREENTIVE_PERIOD_MILLIS		1000
+#define CLOCK_SYNC_TUNE_ELAPSED_MILLIS						(uint32_t)10000
+#define CLOCK_SYNC_MAX_TUNE_ERROR							100
+#define CLOCK_SYNC_TUNE_REMOTE_PREENTIVE_PERIOD_MILLIS		(uint32_t)1000
 
-class ILinkClockSyncer
+#define LOLA_CLOCK_SYNC_TUNE_ALIASING_FACTOR				(int8_t)4
+#define LOLA_CLOCK_SYNC_TUNE_RATIO							(int8_t)2
+
+#define LOLA_CLOCK_SYNC_TUNE_ACCUMULATOR_MAX				(INT8_MAX - LOLA_CLOCK_SYNC_TUNE_ALIASING_FACTOR)
+#define LOLA_CLOCK_SYNC_TUNE_ACCUMULATOR_MIN				(INT8_MIN + LOLA_CLOCK_SYNC_TUNE_ALIASING_FACTOR)
+#define LOLA_CLOCK_SYNC_TUNE_ACCUMULATOR_DIVISOR			(LOLA_CLOCK_SYNC_TUNE_RATIO * LOLA_CLOCK_SYNC_TUNE_ALIASING_FACTOR)
+
+
+class LoLaLinkClockSyncer
 {
 private:
 	ClockSource * SyncedClock = nullptr;
@@ -20,7 +28,7 @@ private:
 protected:
 	uint8_t SyncGoodCount = 0;
 	uint32_t LastSynced = 0;
-	
+
 protected:
 	virtual void OnReset() {}
 
@@ -33,7 +41,7 @@ protected:
 		}
 	}
 
-	void AddOffset(const int32_t offset)
+	inline void AddOffset(const int32_t offset)
 	{
 		if (SyncedClock != nullptr)
 		{
@@ -45,7 +53,7 @@ protected:
 	{
 		if (SyncedClock != nullptr)
 		{
-			SyncedClock->SetRandom();		
+			SyncedClock->SetRandom();
 		}
 	}
 
@@ -93,15 +101,18 @@ public:
 	virtual bool IsTimeToTune() { return false; };
 };
 
-class LinkRemoteClockSyncer : public ILinkClockSyncer
+class LinkRemoteClockSyncer : public LoLaLinkClockSyncer
 {
 private:
 	boolean HostSynced = false;
+
+	int8_t ClockTuneAccumulator = 0;
 
 protected:
 	void OnReset()
 	{
 		HostSynced = false;
+		ClockTuneAccumulator = 0;
 	}
 
 public:
@@ -119,6 +130,7 @@ public:
 	{
 		HostSynced = true;
 		StampSynced();
+		ClockTuneAccumulator = 0;
 	}
 
 	bool HasEstimation()
@@ -131,15 +143,59 @@ public:
 		if (estimationError == 0)
 		{
 			StampSyncGood();
+			ClockTuneAccumulator = 0;
 		}
 		else
 		{
 			AddOffset(estimationError);
 		}
 	}
+
+	void OnTuneErrorReceived(const int32_t estimationError)
+	{
+		if (abs(estimationError > CLOCK_SYNC_MAX_TUNE_ERROR))
+		{
+			//TODO: Count sequential high error tune results, break connection on threshold value.
+			return;
+		}
+		else if (estimationError == 0)
+		{
+			ClockTuneAccumulator = 0;
+			StampSynced();
+		}
+		else
+		{
+			if (estimationError > 0)
+			{
+				if (ClockTuneAccumulator < LOLA_CLOCK_SYNC_TUNE_ACCUMULATOR_MAX)
+				{
+					ClockTuneAccumulator += LOLA_CLOCK_SYNC_TUNE_ALIASING_FACTOR;
+				}
+				else 
+				{
+					AddOffset(LOLA_CLOCK_SYNC_TUNE_ACCUMULATOR_MAX/ LOLA_CLOCK_SYNC_TUNE_ACCUMULATOR_DIVISOR);
+					ClockTuneAccumulator = 0;
+				}
+			}
+			else
+			{
+				if (ClockTuneAccumulator > LOLA_CLOCK_SYNC_TUNE_ACCUMULATOR_MIN)
+				{
+					ClockTuneAccumulator -= LOLA_CLOCK_SYNC_TUNE_ALIASING_FACTOR;
+				}
+				else 
+				{
+					AddOffset(LOLA_CLOCK_SYNC_TUNE_ACCUMULATOR_MIN / LOLA_CLOCK_SYNC_TUNE_ACCUMULATOR_DIVISOR);
+					ClockTuneAccumulator = 0;
+				}
+			}
+
+			AddOffset(ClockTuneAccumulator / LOLA_CLOCK_SYNC_TUNE_ACCUMULATOR_DIVISOR);
+		}
+	}
 };
 
-class LinkHostClockSyncer : public ILinkClockSyncer
+class LinkHostClockSyncer : public LoLaLinkClockSyncer
 {
 private:
 	uint32_t LastEstimation = 0;
@@ -165,20 +221,22 @@ public:
 		return SyncGoodCount >= CLOCK_SYNC_GOOD_ENOUGH_COUNT;
 	}
 
-	//TODO: ClockSyncWarning
-	//bool IsTimeToTune()
-	//{
-	//	return LastSynced == 0 || !IsSynced() || ((millis() - LastSynced) > CLOCK_SYNC_TUNE_ELAPSED_MILLIS);
-	//}
+	bool IsTimeToTune()
+	{
+		return IsSynced() && LastSynced != 0 &&
+			(LastEstimation == 0 ||
+			(millis() - LastEstimation) > CLOCK_SYNC_TUNE_ELAPSED_MILLIS);
+	}
 
 	void OnEstimationReceived(const int32_t estimationError)
 	{
+		LastEstimation = millis();
 		LastError = estimationError;
 		if (LastError == 0)
 		{
 			StampSyncGood();
 		}
-		else if(!IsSynced() && (LastError > 1))
+		else if (!IsSynced() && (LastError > 1))
 		{
 			SyncGoodCount = 0;
 		}
