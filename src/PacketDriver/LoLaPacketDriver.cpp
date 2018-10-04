@@ -155,7 +155,7 @@ void LoLaPacketDriver::BatteryAlarmFired()
 
 void LoLaPacketDriver::SenderTransmit()
 {
-	if (!Sender.IsClear())
+	if (Sender.IsClear())
 	{
 		//Nothing to transmit.
 		return;

@@ -14,7 +14,7 @@ private:
 	TemplateLoLaPacket<LOLA_PACKET_NO_PAYLOAD_SIZE + 1> AckPacket;
 
 public:
-	//Fast Ack, Nack, Ack with Id and Nack with Id packet sender, writes directly to output.
+	//Fast Ack and Ack with Id packet sender, writes directly to output.
 	bool SendPacket(ILoLaPacket* transmitPacket)
 	{
 		Clear();
