@@ -131,20 +131,6 @@ public:
 		return &SyncedClock;
 	}
 
-	uint32_t GetTimeStamp()
-	{
-		return SyncedClock.GetMicros();
-	}
-
-	uint32_t GetMillis()
-	{
-		return millis();
-	}
-
-	uint32_t GetMillisSync()
-	{
-		return SyncedClock.GetMillis();
-	}
 
 	uint32_t GetLastSentMillis()
 	{
@@ -205,6 +191,20 @@ public:
 	}
 
 protected:
+	inline uint32_t GetTimeStamp()
+	{
+		return SyncedClock.GetMicros();
+	}
+
+	inline uint32_t GetMillis()
+	{
+		return millis();
+	}
+
+	inline uint32_t GetMillisSync()
+	{
+		return SyncedClock.GetMillis();
+	}
 
 	uint8_t * GetTransmitPowerPointer()
 	{
