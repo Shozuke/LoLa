@@ -216,10 +216,5 @@ protected:
 	{
 		return LoLa->GetMillis();
 	}
-
-	uint32_t Micros()
-	{
-		return LoLa->GetTimeStamp();
-	}
 };
 #endif

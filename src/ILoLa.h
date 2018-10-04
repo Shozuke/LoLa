@@ -190,12 +190,6 @@ public:
 		return &PacketMap;
 	}
 
-protected:
-	inline uint32_t GetTimeStamp()
-	{
-		return SyncedClock.GetMicros();
-	}
-
 	inline uint32_t GetMillis()
 	{
 		return millis();
@@ -206,6 +200,7 @@ protected:
 		return SyncedClock.GetMillis();
 	}
 
+protected:
 	uint8_t * GetTransmitPowerPointer()
 	{
 		return &TransmitPower;
