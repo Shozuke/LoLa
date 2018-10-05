@@ -27,7 +27,7 @@ void SI446X_CB_RXBEGIN(int16_t rssi)
 
 void SI446X_CB_SENT(void)
 {
-	StaticSi446LoLa->OnSentOk();
+	StaticSi446LoLa->FireOnSentOk();
 }
 
 void SI446X_CB_WUT(void)
@@ -77,10 +77,10 @@ void LoLaSi446xPacketDriver::OnReceiveBegin(const uint8_t length, const int16_t 
 
 	//Disable Si interrupts until we have processed the received packet.
 	Si446x_irq_off();
-	//OnReceived();
+#endif
+
 	//Asynchronously process the received packet.
 	FireOnReceived();
-#endif
 }
 
 void LoLaSi446xPacketDriver::OnReceived()
@@ -112,6 +112,7 @@ void LoLaSi446xPacketDriver::OnTransmitPowerUpdated()
 void LoLaSi446xPacketDriver::OnStart()
 {
 #ifndef MOCK_RADIO
+	Si446x_irq_on(true);
 	Si446x_SERVICE();
 	Si446x_RX(CurrentChannel);
 #endif
