@@ -9,17 +9,19 @@ volatile bool Receiving = false;
 
 void SI446X_CB_RXCOMPLETE(uint8_t length, int16_t rssi)
 {
-	Receiving = true;
+	Receiving = false;
 	StaticSi446LoLa->OnReceiveBegin(length, rssi);
 }
 
 void SI446X_CB_RXINVALID(int16_t rssi)
 {
+	Receiving = false;
 	StaticSi446LoLa->OnReceivedFail(rssi);
 }
 
 void SI446X_CB_RXBEGIN(int16_t rssi)
 {
+	Receiving = true;
 	StaticSi446LoLa->OnIncoming(rssi);
 }
 
@@ -30,26 +32,19 @@ void SI446X_CB_SENT(void)
 
 void SI446X_CB_WUT(void)
 {
-	StaticSi446LoLa->OnWakeUpTimer();
+	StaticSi446LoLa->FireWakeUpTimer();
 }
 
 void SI446X_CB_LOWBATT(void)
 {
-	StaticSi446LoLa->OnBatteryAlarm();
+	StaticSi446LoLa->FireBatteryAlarm();
 }
 
-///////////////////////////////////////////////////////
+///////////////////////
 LoLaSi446xPacketDriver::LoLaSi446xPacketDriver(Scheduler* scheduler)
 	: LoLaPacketDriver(scheduler)
 {
 	StaticSi446LoLa = this;
-}
-
-void LoLaSi446xPacketDriver::CheckPending()
-{	
-#ifndef MOCK_RADIO
-	Si446x_SERVICE();
-#endif
 }
 
 bool LoLaSi446xPacketDriver::Transmit()
@@ -58,7 +53,6 @@ bool LoLaSi446xPacketDriver::Transmit()
 	delayMicroseconds(500);
 	return true;
 #else
-	bool Result = false;
 	//On success(has begun transmitting).
 	return Si446x_TX(Sender.GetBuffer(), Sender.GetBufferSize(), CurrentChannel, SI446X_STATE_RX);
 #endif
@@ -77,23 +71,24 @@ void LoLaSi446xPacketDriver::OnReceiveBegin(const uint8_t length, const int16_t 
 {
 	LoLaPacketDriver::OnReceiveBegin(length, rssi);
 
-	//Disable Si interrupts until we have processed the received packet.
 #ifndef MOCK_RADIO
+	Si446x_read(Receiver.GetBuffer(), Receiver.GetBufferSize());
+	Si446x_RX(CurrentChannel);
+
+	//Disable Si interrupts until we have processed the received packet.
 	Si446x_irq_off();
+	OnReceived();
+	//Asynchronously process the received packet.
+	//EventQueue.AppendEventToQueue(AsyncActionsEnum::ActionFireOnReceived);
 #endif
 }
 
-void LoLaSi446xPacketDriver::ReceivePacket()
+void LoLaSi446xPacketDriver::OnReceived()
 {
-#ifndef MOCK_RADIO
-	Si446x_read(Receiver.GetBuffer(), Receiver.GetBufferSize());
-#endif
-
-	LoLaPacketDriver::ReceivePacket();
+	LoLaPacketDriver::OnReceived();
 #ifndef MOCK_RADIO
 	Si446x_irq_on(true);
 #endif
-	CheckPendingAsync(); //Take this chance to make sure there are no pending interrupts.
 }
 
 void LoLaSi446xPacketDriver::OnReceivedFail(const int16_t rssi)
@@ -102,7 +97,6 @@ void LoLaSi446xPacketDriver::OnReceivedFail(const int16_t rssi)
 #ifndef MOCK_RADIO
 	Si446x_irq_on(true);
 #endif
-	CheckPendingAsync();
 }
 
 void LoLaSi446xPacketDriver::OnChannelUpdated()
@@ -110,59 +104,23 @@ void LoLaSi446xPacketDriver::OnChannelUpdated()
 	Si446x_RX(CurrentChannel);
 }
 
-void LoLaSi446xPacketDriver::OnTransmitPowerUpdated() 
+void LoLaSi446xPacketDriver::OnTransmitPowerUpdated()
 {
 	Si446x_setTxPower(TransmitPower);
 }
 
-void LoLaSi446xPacketDriver::OnStop()
-{
-	Si446x_sleep();
-}
-
 void LoLaSi446xPacketDriver::OnStart()
 {
-	LoLaPacketDriver::OnStart();
 #ifndef MOCK_RADIO
-	CheckPending();
+	Si446x_SERVICE();
 	Si446x_RX(CurrentChannel);
 #endif
-}
-
-uint8_t LoLaSi446xPacketDriver::GetTransmitPowerMax() const
-{
-	return SI4463_MAX_TRANSMIT_POWER;
-}
-uint8_t LoLaSi446xPacketDriver::GetTransmitPowerMin() const
-{
-	return 0;
-}
-
-int16_t LoLaSi446xPacketDriver::GetRSSIMax() const
-{ 
-	return SI4463_MAX_RSSI;
-}
-int16_t LoLaSi446xPacketDriver::GetRSSIMin() const
-{ 
-	return SI4463_MIN_RSSI;
-}
-
-uint8_t LoLaSi446xPacketDriver::GetChannelMax() const
-{
-	return SI4463_MAX_CHANNEL;
-}
-uint8_t LoLaSi446xPacketDriver::GetChannelMin() const
-{
-	return SI4463_MIN_CHANNEL;
 }
 
 bool LoLaSi446xPacketDriver::Setup()
 {
 	if (LoLaPacketDriver::Setup())
 	{
-		SetTransmitPower(TRANSMIT_POWER);
-		SetChannel(CHANNEL);
-
 #ifndef MOCK_RADIO
 		//The SPI interface is designed to operate at a maximum of 10 MHz.
 #if defined(ARDUINO_ARCH_AVR)
@@ -183,7 +141,7 @@ bool LoLaSi446xPacketDriver::Setup()
 			Si446x_setLowBatt(3200); // Set low battery voltage to 3200mV
 			Si446x_setupWUT(1, 8192, 0, SI446X_WUT_BATT); // Run check battery every 2 seconds.
 
-			CheckPending();
+			Si446x_SERVICE();
 
 			Si446x_sleep();
 #ifdef DEBUG_LOLA
