@@ -21,43 +21,6 @@
 class LoLaPacketDriver : public ILoLa
 {
 private:
-	class IncomingInfoStruct
-	{
-	private:
-		uint32_t PacketTime = ILOLA_INVALID_MILLIS;
-		int16_t PacketRSSI = ILOLA_INVALID_RSSI;
-
-	public:
-		IncomingInfoStruct() {}
-
-		uint32_t GetPacketTime()
-		{
-			return PacketTime;
-		}
-
-		int16_t GetPacketRSSI()
-		{
-			return PacketRSSI;
-		}
-
-		void Clear()
-		{
-			PacketTime = ILOLA_INVALID_MILLIS;
-			PacketRSSI = ILOLA_INVALID_RSSI;
-		}
-
-		bool HasInfo()
-		{
-			return PacketTime != ILOLA_INVALID_MILLIS && PacketRSSI != ILOLA_INVALID_RSSI;
-		}
-
-		void SetInfo(const uint32_t time, const int16_t rssi)
-		{
-			PacketTime = time;
-			PacketRSSI = rssi;
-		}
-	} IncomingInfo;
-
 	//Helper for IsInSendSlot().
 	uint32_t SendSlotElapsed;
 
