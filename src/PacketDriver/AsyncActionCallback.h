@@ -39,6 +39,8 @@ public:
 
 	bool OnEnable()
 	{
+		Task::forceNextIteration();
+
 		return true;
 	}
 
@@ -56,6 +58,7 @@ public:
 
 		EventQueue.pull(Grunt);
 		ActionCallback.fire(Grunt);
+		Task::forceNextIteration();
 
 		return true;
 	}
