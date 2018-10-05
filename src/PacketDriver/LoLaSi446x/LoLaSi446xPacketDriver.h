@@ -41,6 +41,8 @@ protected:
 	bool Transmit();
 	bool CanTransmit();
 	void OnStart();
+	void OnChannelUpdated();
+	void OnTransmitPowerUpdated();
 
 public:
 	LoLaSi446xPacketDriver(Scheduler* scheduler);
@@ -81,9 +83,6 @@ public:
 	{
 		return SI4463_RSSI_MIN;
 	}
-
-	void OnChannelUpdated();
-	void OnTransmitPowerUpdated();
 
 };
 #endif

@@ -35,7 +35,8 @@ protected:
 	{
 		ActionFireOnReceived,
 		ActionFireBatteryAlarm,
-		ActionFireWakeUpTimer
+		ActionFireWakeUpTimer,
+		ActionFireOnSentOk
 	};
 
 	AsyncActionCallback EventQueue;
@@ -47,6 +48,8 @@ public:
 
 	void OnAsyncEvent(const uint8_t actionCode);
 
+	void FireOnSentOk();
+	void FireOnReceived();
 	void FireBatteryAlarm();
 	void FireWakeUpTimer();
 

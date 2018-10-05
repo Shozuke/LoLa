@@ -77,9 +77,9 @@ void LoLaSi446xPacketDriver::OnReceiveBegin(const uint8_t length, const int16_t 
 
 	//Disable Si interrupts until we have processed the received packet.
 	Si446x_irq_off();
-	OnReceived();
+	//OnReceived();
 	//Asynchronously process the received packet.
-	//EventQueue.AppendEventToQueue(AsyncActionsEnum::ActionFireOnReceived);
+	FireOnReceived();
 #endif
 }
 

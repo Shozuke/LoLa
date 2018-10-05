@@ -15,14 +15,24 @@ void LoLaPacketDriver::FireBatteryAlarm()
 	EventQueue.AppendEventToQueue(AsyncActionsEnum::ActionFireBatteryAlarm);
 }
 
-void LoLaPacketDriver::OnSentOk()
-{
-	//TODO: Log for statistics.
-}
-
 void LoLaPacketDriver::FireWakeUpTimer()
 {
 	EventQueue.AppendEventToQueue(AsyncActionsEnum::ActionFireWakeUpTimer);
+}
+
+void LoLaPacketDriver::FireOnSentOk()
+{
+	EventQueue.AppendEventToQueue(AsyncActionsEnum::ActionFireOnSentOk);
+}
+
+void LoLaPacketDriver::FireOnReceived()
+{
+	EventQueue.AppendEventToQueue(AsyncActionsEnum::ActionFireOnReceived);
+}
+
+void LoLaPacketDriver::OnSentOk()
+{
+	//TODO: Log for statistics.
 }
 
 //When RF detects incoming packet.
@@ -227,10 +237,13 @@ void LoLaPacketDriver::OnAsyncEvent(const uint8_t actionCode)
 		OnReceived();
 		break;
 	case AsyncActionsEnum::ActionFireBatteryAlarm:
-		//OnBatteryAlarm();
+		OnBatteryAlarm();
 		break;
 	case AsyncActionsEnum::ActionFireWakeUpTimer:
-		//OnWakeUpTimer();
+		OnWakeUpTimer();
+		break;
+	case AsyncActionsEnum::ActionFireOnSentOk:
+		OnSentOk();
 		break;
 	default:
 		break;
