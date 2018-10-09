@@ -9,14 +9,22 @@
 #include <TaskSchedulerDeclarations.h>
 #include <PacketDriver\LoLaPacketDriver.h>
 #include <RingBufCPP.h>
+
 #include <SPI.h>
+
 
 #ifndef MOCK_RADIO
 #include <Si446x.h>
 #endif // !MOCK_RADIO
 
 
-#define PART_NUMBER_SI4463X (uint32_t)17507
+//Channel range.
+#define SI4463_CHANNEL_MIN    0
+#define SI4463_CHANNEL_MAX    26
+
+//RSSI indicator reference values.
+#define SI4463_RSSI_MIN        (int16_t(-120))
+#define SI4463_RSSI_MAX        (int16_t(-50))
 
 //   0 = -32dBm	(<1uW)
 //   7 =  0dBm	(1mW)
@@ -28,12 +36,9 @@
 #define SI4463_TRANSMIT_POWER_MIN 1
 #define SI4463_TRANSMIT_POWER_MAX 40
 
-//Channel to listen to(0 - 20)
-#define SI4463_CHANNEL_MIN	0
-#define SI4463_CHANNEL_MAX	10
+//Expected part number.
+#define PART_NUMBER_SI4463X 17507
 
-#define SI4463_RSSI_MIN		(int16_t(-120))
-#define SI4463_RSSI_MAX		(int16_t(-50))
 
 class LoLaSi446xPacketDriver : public LoLaPacketDriver
 {
@@ -44,25 +49,20 @@ protected:
 	void OnChannelUpdated();
 	void OnTransmitPowerUpdated();
 
+private:
+	void DisableInterruptsInternal();
+
 public:
 	LoLaSi446xPacketDriver(Scheduler* scheduler);
 	bool Setup();
+	bool DisableInterrupts();
 
-	void OnReceiveBegin(const uint8_t length, const  int16_t rssi);
+	void EnableInterrupts();
+
+	void OnReceiveBegin(const uint8_t length, const int16_t rssi);
+
 	void OnReceivedFail(const int16_t rssi);
-
-	//Override to capture data before processing in base class.
 	void OnReceived();
-
-	uint8_t GetChannelMax() const
-	{
-		return SI4463_CHANNEL_MAX;
-	}
-
-	uint8_t GetChannelMin() const
-	{
-		return SI4463_CHANNEL_MIN;
-	}
 
 	uint8_t GetTransmitPowerMax() const
 	{
@@ -74,15 +74,24 @@ public:
 		return SI4463_TRANSMIT_POWER_MIN;
 	}
 
-	int16_t GetRSSIMax() const
+	int16_t GetRSSIMax() const 
 	{
-		return SI4463_RSSI_MAX;
+		return SI4463_TRANSMIT_POWER_MIN;
 	}
 
 	int16_t GetRSSIMin() const
 	{
-		return SI4463_RSSI_MIN;
+		return SI4463_TRANSMIT_POWER_MIN;
 	}
 
+	uint8_t GetChannelMax() const
+	{
+		return SI4463_CHANNEL_MAX;
+	}
+
+	uint8_t GetChannelMin() const
+	{
+		return SI4463_CHANNEL_MIN;
+	}
 };
 #endif

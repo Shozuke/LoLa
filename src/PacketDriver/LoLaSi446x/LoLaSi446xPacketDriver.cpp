@@ -3,8 +3,11 @@
 
 #include <PacketDriver\LoLaSi446x\LoLaSi446xPacketDriver.h>
 
+#define UNINITIALIZED_INTERRUPT 0XFF
+
 //Static handlers for interrupts.
 LoLaSi446xPacketDriver* StaticSi446LoLa = nullptr;
+volatile uint8_t InterruptStatus = UNINITIALIZED_INTERRUPT;
 volatile bool Receiving = false;
 
 void SI446X_CB_RXCOMPLETE(uint8_t length, int16_t rssi)
@@ -32,19 +35,50 @@ void SI446X_CB_SENT(void)
 
 void SI446X_CB_WUT(void)
 {
-	StaticSi446LoLa->FireWakeUpTimer();
+	StaticSi446LoLa->OnWakeUpTimer();
 }
 
 void SI446X_CB_LOWBATT(void)
 {
-	StaticSi446LoLa->FireBatteryAlarm();
+	StaticSi446LoLa->OnBatteryAlarm();
 }
 
 ///////////////////////
 LoLaSi446xPacketDriver::LoLaSi446xPacketDriver(Scheduler* scheduler)
-	: LoLaPacketDriver(scheduler)
+	: LoLaPacketDriver()
 {
 	StaticSi446LoLa = this;
+}
+
+bool LoLaSi446xPacketDriver::DisableInterrupts()
+{
+	if (!Receiving)
+	{
+#ifndef MOCK_RADIO
+		InterruptStatus = Si446x_irq_off();
+#endif
+		return true;
+	}
+
+	return false;
+}
+
+void LoLaSi446xPacketDriver::DisableInterruptsInternal()
+{
+#ifndef MOCK_RADIO
+	InterruptStatus = Si446x_irq_off();
+#endif
+}
+
+void LoLaSi446xPacketDriver::EnableInterrupts()
+{
+#ifndef MOCK_RADIO
+	if (InterruptStatus != UNINITIALIZED_INTERRUPT)
+	{
+		Si446x_irq_on(InterruptStatus);
+	}
+	InterruptStatus = UNINITIALIZED_INTERRUPT;
+#endif
 }
 
 bool LoLaSi446xPacketDriver::Transmit()
@@ -53,8 +87,14 @@ bool LoLaSi446xPacketDriver::Transmit()
 	delayMicroseconds(500);
 	return true;
 #else
-	//On success(has begun transmitting).
-	return Si446x_TX(Sender.GetBuffer(), Sender.GetBufferSize(), CurrentChannel, SI446X_STATE_RX);
+	bool Result = false;
+	if (Sender.GetBufferSize() > 0)
+	{
+		//On success(has begun transmitting).
+		Result = Si446x_TX(Sender.GetBuffer(), Sender.GetBufferSize(), CurrentChannel, SI446X_STATE_RX);
+	}
+
+	return Result;
 #endif
 }
 
@@ -71,36 +111,33 @@ void LoLaSi446xPacketDriver::OnReceiveBegin(const uint8_t length, const int16_t 
 {
 	LoLaPacketDriver::OnReceiveBegin(length, rssi);
 
-#ifndef MOCK_RADIO
-	Si446x_read(Receiver.GetBuffer(), Receiver.GetBufferSize());
-	Si446x_RX(CurrentChannel);
-
 	//Disable Si interrupts until we have processed the received packet.
-	Si446x_irq_off();
-	//OnReceived();
-	//Asynchronously process the received packet.
-	FireOnReceived();
-#endif
+	DisableInterruptsInternal();
+
+	OnReceived();
 }
 
 void LoLaSi446xPacketDriver::OnReceived()
 {
-	LoLaPacketDriver::OnReceived();
 #ifndef MOCK_RADIO
-	Si446x_irq_on(true);
+	Si446x_read(Receiver.GetBuffer(), Receiver.GetBufferSize());
+	Si446x_RX(CurrentChannel);
 #endif
+
+	LoLaPacketDriver::OnReceived();
+	EnableInterrupts();
 }
 
 void LoLaSi446xPacketDriver::OnReceivedFail(const int16_t rssi)
 {
 	LoLaPacketDriver::OnReceivedFail(rssi);
-#ifndef MOCK_RADIO
-	Si446x_irq_on(true);
-#endif
+	EnableInterrupts();
 }
 
 void LoLaSi446xPacketDriver::OnChannelUpdated()
 {
+	//TODO: Replace with FIFO preserving version.
+	Si446x_SERVICE();
 	Si446x_RX(CurrentChannel);
 }
 
@@ -112,6 +149,7 @@ void LoLaSi446xPacketDriver::OnTransmitPowerUpdated()
 void LoLaSi446xPacketDriver::OnStart()
 {
 #ifndef MOCK_RADIO
+	InterruptStatus = UNINITIALIZED_INTERRUPT;
 	Si446x_SERVICE();
 	Si446x_RX(CurrentChannel);
 #endif
@@ -171,7 +209,7 @@ bool LoLaSi446xPacketDriver::Setup()
 #else 
 		return true;
 #endif
-	}
+		}
 
 	return false;
 }

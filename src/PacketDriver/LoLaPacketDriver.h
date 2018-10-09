@@ -10,8 +10,6 @@
 
 #include <Services\LoLaServicesManager.h>
 
-#include <PacketDriver\AsyncActionCallback.h>
-
 #define LOLA_PACKET_MANAGER_SEND_MIN_BACK_OFF_DURATION_MILLIS				(uint32_t)5
 #define LOLA_PACKET_MANAGER_SEND_AFTER_RECEIVE_MIN_BACK_OFF_DURATION_MILLIS (uint32_t)5
 
@@ -30,31 +28,15 @@ protected:
 	LoLaReceiver Receiver;
 	LoLaSender Sender;
 
-	//Async handler for interrupt triggered events.
-	enum AsyncActionsEnum : uint8_t
-	{
-		ActionFireOnReceived,
-		ActionFireBatteryAlarm,
-		ActionFireWakeUpTimer,
-		ActionFireOnSentOk
-	};
-
-	AsyncActionCallback EventQueue;
-
 public:
-	LoLaPacketDriver(Scheduler* scheduler);
+	LoLaPacketDriver();
 	LoLaServicesManager* GetServices();
 	void SetCryptoSeedSource(ISeedSource* cryptoSeedSource);
 
-	void OnAsyncEvent(const uint8_t actionCode);
-
-	void FireOnSentOk();
-	void FireOnReceived();
-	void FireBatteryAlarm();
-	void FireWakeUpTimer();
-
 public:
 	virtual bool SendPacket(ILoLaPacket* packet);
+
+public:
 	virtual bool Setup();
 	virtual void OnIncoming(const int16_t rssi);
 	virtual void OnReceiveBegin(const uint8_t length, const int16_t rssi);
@@ -73,13 +55,13 @@ public:
 #endif
 
 protected:
+	void OnBatteryAlarm();
+	void OnWakeUpTimer();
+
+protected:
 	virtual bool Transmit() { return false; }
 	virtual bool CanTransmit() { return true; }
 	virtual void OnStart() {}
-
-protected:
-	void OnBatteryAlarm();
-	void OnWakeUpTimer();
 
 private:
 	inline bool HotAfterSend();
