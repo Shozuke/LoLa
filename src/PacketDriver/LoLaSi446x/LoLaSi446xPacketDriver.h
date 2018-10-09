@@ -40,6 +40,10 @@
 #define PART_NUMBER_SI4463X 17507
 
 
+#define SI4463_MIN_RSSI (int16_t(-110))
+#define SI4463_MAX_RSSI (int16_t(-50))
+
+
 class LoLaSi446xPacketDriver : public LoLaPacketDriver
 {
 protected:
@@ -60,7 +64,6 @@ public:
 	void EnableInterrupts();
 
 	void OnReceiveBegin(const uint8_t length, const int16_t rssi);
-
 	void OnReceivedFail(const int16_t rssi);
 	void OnReceived();
 
