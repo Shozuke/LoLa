@@ -69,7 +69,7 @@ void LoLaPacketDriver::OnReceived()
 		{
 			if (Receiver.GetIncomingDefinition()->HasACK())
 			{
-				if (Sender.SendAck(Receiver.GetIncomingPacket()->GetDataHeader(), Receiver.GetIncomingPacket()->GetId()))
+				if (Sender.SendAck(Receiver.GetIncomingDefinition()->GetHeader(), Receiver.GetIncomingPacket()->GetId()))
 				{
 					if (Transmit())
 					{
@@ -162,13 +162,13 @@ bool LoLaPacketDriver::AllowedSend(const bool overridePermission)
 	{
 		return CanTransmit() &&
 			(overridePermission || IsInSendSlot());
-}
-	else 
+	}
+	else
 	{
 		return CanTransmit() && overridePermission &&
 			!HotAfterSend() && !HotAfterReceive();
 	}
-	
+
 #else
 	return Enabled &&
 		!HotAfterSend() && !HotAfterReceive() &&

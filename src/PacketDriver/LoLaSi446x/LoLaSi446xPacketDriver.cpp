@@ -30,7 +30,7 @@ void SI446X_CB_RXBEGIN(int16_t rssi)
 
 void SI446X_CB_SENT(void)
 {
-	StaticSi446LoLa->FireOnSentOk();
+	StaticSi446LoLa->OnSentOk();
 }
 
 void SI446X_CB_WUT(void)
@@ -112,17 +112,9 @@ void LoLaSi446xPacketDriver::OnReceiveBegin(const uint8_t length, const int16_t 
 	LoLaPacketDriver::OnReceiveBegin(length, rssi);
 
 	//Disable Si interrupts until we have processed the received packet.
-<<<<<<< HEAD
-	Si446x_irq_off();
-#endif
-
-	//Asynchronously process the received packet.
-	FireOnReceived();
-=======
 	DisableInterruptsInternal();
 
 	OnReceived();
->>>>>>> origin/callback-refactor-driver
 }
 
 void LoLaSi446xPacketDriver::OnReceived()
@@ -145,23 +137,18 @@ void LoLaSi446xPacketDriver::OnReceivedFail(const int16_t rssi)
 void LoLaSi446xPacketDriver::OnChannelUpdated()
 {
 	//TODO: Replace with FIFO preserving version.
-	Si446x_SERVICE();
 	Si446x_RX(CurrentChannel);
 }
 
 void LoLaSi446xPacketDriver::OnTransmitPowerUpdated()
 {
-	Si446x_setTxPower(TransmitPower);
+	Si446x_setTxPower(CurrentTransmitPower);
 }
 
 void LoLaSi446xPacketDriver::OnStart()
 {
 #ifndef MOCK_RADIO
-<<<<<<< HEAD
-	Si446x_irq_on(true);
-=======
 	InterruptStatus = UNINITIALIZED_INTERRUPT;
->>>>>>> origin/callback-refactor-driver
 	Si446x_SERVICE();
 	Si446x_RX(CurrentChannel);
 #endif
@@ -176,7 +163,7 @@ bool LoLaSi446xPacketDriver::Setup()
 #if defined(ARDUINO_ARCH_AVR)
 		SPI.setClockDivider(SPI_CLOCK_DIV2); // 16 MHz / 2 = 8 MHz
 #elif defined(ARDUINO_ARCH_STM32F1)
-		SPI.setClockDivider(SPI_CLOCK_DIV4); // 72 MHz / 8 = 9 MHz
+		SPI.setClockDivider(SPI_CLOCK_DIV8); // 72 MHz / 8 = 9 MHz
 #endif
 
 		// Start up
@@ -186,7 +173,7 @@ bool LoLaSi446xPacketDriver::Setup()
 
 		if (info.part == PART_NUMBER_SI4463X)
 		{
-			Si446x_setTxPower(TransmitPower);
+			Si446x_setTxPower(CurrentTransmitPower);
 			Si446x_setupCallback(SI446X_CBS_RXBEGIN | SI446X_CBS_SENT, 1); // Enable packet RX begin and packet sent callbacks
 			Si446x_setLowBatt(3200); // Set low battery voltage to 3200mV
 			Si446x_setupWUT(1, 8192, 0, SI446X_WUT_BATT); // Run check battery every 2 seconds.
@@ -221,7 +208,7 @@ bool LoLaSi446xPacketDriver::Setup()
 #else 
 		return true;
 #endif
-		}
+	}
 
 	return false;
 }

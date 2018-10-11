@@ -16,6 +16,43 @@
 class LoLaPacketDriver : public ILoLa
 {
 private:
+	class IncomingInfoStruct
+	{
+	private:
+		uint32_t PacketTime = ILOLA_INVALID_MILLIS;
+		int16_t PacketRSSI = ILOLA_INVALID_RSSI;
+
+	public:
+		IncomingInfoStruct() {}
+
+		uint32_t GetPacketTime()
+		{
+			return PacketTime;
+		}
+
+		int16_t GetPacketRSSI()
+		{
+			return PacketRSSI;
+		}
+
+		void Clear()
+		{
+			PacketTime = ILOLA_INVALID_MILLIS;
+			PacketRSSI = ILOLA_INVALID_RSSI;
+		}
+
+		bool HasInfo()
+		{
+			return PacketTime != ILOLA_INVALID_MILLIS && PacketRSSI != ILOLA_INVALID_RSSI;
+		}
+
+		void SetInfo(const uint32_t time, const int16_t rssi)
+		{
+			PacketTime = time;
+			PacketRSSI = rssi;
+		}
+	} IncomingInfo;
+
 	//Helper for IsInSendSlot().
 	uint32_t SendSlotElapsed;
 
@@ -43,7 +80,8 @@ public:
 	virtual void OnReceivedFail(const int16_t rssi);
 	virtual void OnSentOk();
 	virtual void OnReceived();
-
+	virtual void OnBatteryAlarm();
+	virtual void OnWakeUpTimer();
 	virtual bool AllowedSend(const bool overridePermission = false);
 
 #ifdef DEBUG_LOLA
@@ -55,12 +93,10 @@ public:
 #endif
 
 protected:
-	void OnBatteryAlarm();
-	void OnWakeUpTimer();
-
-protected:
 	virtual bool Transmit() { return false; }
 	virtual bool CanTransmit() { return true; }
+
+protected:
 	virtual void OnStart() {}
 
 private:
@@ -68,5 +104,6 @@ private:
 	inline bool HotAfterReceive();
 
 	inline bool IsInSendSlot();
+
 };
 #endif

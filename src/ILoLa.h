@@ -87,7 +87,7 @@ protected:
 	///
 
 	///Configurations
-	uint8_t TransmitPower = ILOLA_DEFAULT_TRANSMIT_POWER;
+	uint8_t CurrentTransmitPower = ILOLA_DEFAULT_TRANSMIT_POWER;
 	uint8_t CurrentChannel = ILOLA_DEFAULT_CHANNEL;
 	bool Enabled = false;
 	const uint8_t DuplexPeriodMillis = ILOLA_DEFAULT_DUPLEX_PERIOD_MILLIS;
@@ -196,12 +196,12 @@ public:
 
 	uint8_t GetTransmitPower()
 	{
-		return TransmitPower;
+		return CurrentTransmitPower;
 	}
 
 	bool SetTransmitPower(const uint8_t transmitPower)
 	{
-		TransmitPower = transmitPower;
+		CurrentTransmitPower = transmitPower;
 
 		OnTransmitPowerUpdated();
 
@@ -235,17 +235,6 @@ public:
 	inline uint32_t GetMillisSync()
 	{
 		return SyncedClock.GetMillis();
-	}
-
-protected:
-	uint8_t * GetTransmitPowerPointer()
-	{
-		return &TransmitPower;
-	}
-
-	uint8_t* GetChannelPointer()
-	{
-		return &CurrentChannel;
 	}
 
 protected:
