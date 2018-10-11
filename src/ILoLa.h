@@ -10,7 +10,7 @@
 #include <stdint.h>
 #endif
 
-#define ILOLA_DEFAULT_CHANNEL				1
+#define ILOLA_DEFAULT_CHANNEL				0
 #define ILOLA_DEFAULT_TRANSMIT_POWER		10
 #define ILOLA_DEFAULT_DUPLEX_PERIOD_MILLIS	10
 
@@ -157,7 +157,7 @@ public:
 		{
 			return LinkIndicator->HasLink();
 		}
-		else 
+		else
 		{
 			return false;
 		}
@@ -248,6 +248,9 @@ protected:
 		return &CurrentChannel;
 	}
 
+protected:
+	virtual void OnChannelUpdated() {}
+	virtual void OnTransmitPowerUpdated() {}
 
 public:
 	virtual bool SendPacket(ILoLaPacket* packet) { return false; }
@@ -271,10 +274,6 @@ public:
 	virtual void OnReceived() {}
 	virtual void OnSentOk() {}
 	virtual void OnIncoming(const int16_t rssi) {}
-
-
-	virtual void OnChannelUpdated() {}
-	virtual void OnTransmitPowerUpdated() {}
 
 	virtual void OnBatteryAlarm() {}
 
