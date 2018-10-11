@@ -20,6 +20,8 @@
 
 #include <Services\Link\LoLaLinkCryptoChallenge.h>
 
+#include <Services\Link\LoLaLinkLatencyMeter.h>
+
 #ifdef LOLA_LINK_DIAGNOSTICS_ENABLED
 #include <Services\LoLaDiagnosticsService\LoLaDiagnosticsService.h>
 #endif
@@ -69,7 +71,7 @@ protected:
 	IChallengeTransaction* ChallengeTransaction = nullptr;
 
 	//Latency measurement.
-	uint32_t LastSentWithAck = ILOLA_INVALID_MILLIS;
+	LoLaLinkLatencyMeter LatencyMeter;
 
 	//Optimized memory usage grunt packet.
 	TemplateLoLaPacket<LOLA_PACKET_SLIM_SIZE> PacketHolder;
@@ -114,7 +116,7 @@ protected:
 	virtual void OnClockSync() {}
 	virtual void OnClockSyncSwitchOver() { SetNextRunDelay(LOLA_LINK_SERVICE_FAST_CHECK_PERIOD); }
 	virtual void OnLinkProtocolSwitchOver() { SetNextRunDelay(LOLA_LINK_SERVICE_FAST_CHECK_PERIOD); }
-	virtual void OnKeepingConnected() { SetNextRunDelay(LOLA_LINK_SERVICE_KEEP_ALIVE_SEND_PERIOD); }
+	virtual void OnKeepingConnected() { SetNextRunDelay(LOLA_LINK_SERVICE_FAST_CHECK_PERIOD); }
 
 private:
 	inline void TrySendPing(const uint32_t resendPeriod)
@@ -128,56 +130,47 @@ private:
 
 	void OnConnecting()
 	{
-		if (SessionId == LOLA_LINK_SERVICE_INVALID_SESSION ||
-			RemotePMAC == LOLA_INVALID_PMAC)
+		switch (ConnectingState)
 		{
+		case ConnectingStagesEnum::ClockSyncStage:
+			if (ClockSyncerPointer->IsSynced())
+			{
+				SetConnectingState(ConnectingStagesEnum::ClockSyncSwitchOver);
+			}
+			else
+			{
+				OnClockSync();
+			}
+			break;
+		case ConnectingStagesEnum::ClockSyncSwitchOver:
+			OnClockSyncSwitchOver();
+			//We transition forward when we receive the appropriate message.
+			break;
+		case ConnectingStagesEnum::ChallengeStage:
+			if (ChallengeTransaction->IsChallengeComplete())
+			{
+				SetConnectingState(ConnectingStagesEnum::ChallengeSwitchOver);
+				SetNextRunASAP();
+			}
+			else
+			{
+				OnChallenging();
+			}
+			break;
+		case ConnectingStagesEnum::ChallengeSwitchOver:
+			OnChallengeSwitchOver();
+			break;
+		case ConnectingStagesEnum::LinkProtocolSwitchOver:
+			OnLinkProtocolSwitchOver();
+			break;
+		case ConnectingStagesEnum::AllConnectingStagesDone:
+			//All connecting stages complete, we have a link.
+			UpdateLinkState(LoLaLinkInfo::LinkStateEnum::Connected);
+			break;
+		default:
 			UpdateLinkState(LoLaLinkInfo::LinkStateEnum::AwaitingSleeping);
 			SetNextRunASAP();
-		}
-		else
-		{
-			switch (ConnectingState)
-			{
-			case ConnectingStagesEnum::ClockSyncStage:
-				if (ClockSyncerPointer->IsSynced())
-				{
-					SetConnectingState(ConnectingStagesEnum::ClockSyncSwitchOver);
-				}
-				else
-				{
-					OnClockSync();
-				}
-				break;
-			case ConnectingStagesEnum::ClockSyncSwitchOver:
-				OnClockSyncSwitchOver();
-				//We transition forward when we receive the appropriate message.
-				break;
-			case ConnectingStagesEnum::ChallengeStage:
-				if (ChallengeTransaction->IsChallengeComplete())
-				{
-					SetConnectingState(ConnectingStagesEnum::ChallengeSwitchOver);
-					SetNextRunASAP();
-				}
-				else
-				{
-					OnChallenging();
-				}
-				break;
-			case ConnectingStagesEnum::ChallengeSwitchOver:
-				OnChallengeSwitchOver();
-				break;
-			case ConnectingStagesEnum::LinkProtocolSwitchOver:
-				OnLinkProtocolSwitchOver();
-				break;
-			case ConnectingStagesEnum::AllConnectingStagesDone:
-				//All connecting stages complete, we have a link.
-				UpdateLinkState(LoLaLinkInfo::LinkStateEnum::Connected);
-				break;
-			default:
-				UpdateLinkState(LoLaLinkInfo::LinkStateEnum::AwaitingSleeping);
-				SetNextRunASAP();
-				break;
-			}
+			break;
 		}
 	}
 
@@ -197,9 +190,6 @@ public:
 			loLa->SetLinkIndicator(&LinkInfo);
 		}
 
-		CryptoSeed.Reset();
-
-		ClearSession();
 	}
 
 	LoLaLinkInfo* GetLinkInfo()
@@ -252,7 +242,9 @@ public:
 protected:
 	void OnAckReceived(const uint8_t header, const uint8_t id)
 	{
-		//if()//TODO: Catch and measure packet round trip time
+		//Catch and store acked packets' round trip time.
+		LatencyMeter.OnAckReceived(id);
+
 		if (header == LinkWithAckDefinition.GetHeader())
 		{
 			OnLinkPacketAckReceived(id);
@@ -298,7 +290,13 @@ protected:
 		}
 	}
 
-	void SetConnectingState(const uint8_t connectingState)
+	inline void SetTOTPEnabled()
+	{		
+		SetBaseSeed();
+		CryptoSeed.SetTOTPEnabled(true, GetLoLa()->GetClockSource(), ChallengeTransaction->GetToken());
+	}
+
+	inline void SetConnectingState(const uint8_t connectingState)
 	{
 		ConnectingState = connectingState;
 		ResetLastSentTimeStamp();
@@ -343,6 +341,8 @@ protected:
 		SessionId = LOLA_LINK_SERVICE_INVALID_SESSION;
 		RemotePMAC = LOLA_INVALID_PMAC;
 
+		LatencyMeter.Reset();
+
 		if (ClockSyncerPointer != nullptr)
 		{
 			ClockSyncerPointer->Reset();
@@ -374,9 +374,11 @@ protected:
 
 	bool OnSetup()
 	{
-		if (IPacketSendService::OnSetup())
+		if (IPacketSendService::OnSetup() &&
+			ClockSyncerPointer != nullptr && 
+			ClockSyncerPointer->Setup(GetLoLa()->GetClockSource()) &&
+			PMACGenerator.SetId(GetLoLa()->GetIdPointer(), GetLoLa()->GetIdLength()))
 		{
-			PMACGenerator.SetId(GetLoLa()->GetIdPointer(), GetLoLa()->GetIdLength());
 			ClearSession();
 
 #ifdef DEBUG_LOLA
@@ -384,10 +386,12 @@ protected:
 			PrintPMAC(PMACGenerator.GetPMAC());
 			Serial.println();
 #endif
+
+			CryptoSeed.Reset();
 			ResetStateStartTime();
 			SetNextRunASAP();
 
-			return ClockSyncerPointer != nullptr && ClockSyncerPointer->Setup(GetLoLa()->GetClockSource());
+			return true;
 
 		}
 		return false;
@@ -398,7 +402,7 @@ protected:
 		if (PacketHolder.GetDefinition()->HasACK())
 		{
 			//Piggy back on any link with ack packets to measure latency.
-			LastSentWithAck = GetLoLa()->GetLastSentMillis();
+			LatencyMeter.OnAckPacketSent(PacketHolder.GetId());
 		}
 	}
 
@@ -408,7 +412,6 @@ protected:
 		{
 			ResetStateStartTime();
 			ResetLastSentTimeStamp();
-			CryptoSeed.Reset();
 
 			//Previous state.
 			if (LinkInfo.LinkState == LoLaLinkInfo::LinkStateEnum::Connected)
@@ -425,13 +428,16 @@ protected:
 			{
 			case LoLaLinkInfo::LinkStateEnum::Setup:
 				ClearSession();
+				CryptoSeed.Reset();
 				SetNextRunDefault();
 				break;
 			case LoLaLinkInfo::LinkStateEnum::AwaitingLink:
+				CryptoSeed.Reset();
 				SetConnectingState(0);
 				SetNextRunASAP();
 				break;
 			case LoLaLinkInfo::LinkStateEnum::AwaitingSleeping:
+				CryptoSeed.Reset();
 				SetNextRunDelay(LOLA_LINK_SERVICE_SLEEP_PERIOD);
 				break;
 			case LoLaLinkInfo::LinkStateEnum::Connecting:
@@ -454,18 +460,22 @@ protected:
 				LinkInfo.StampLinkStarted();
 				SetBaseSeed();
 				CryptoSeed.SetTOTPEnabled(true, GetLoLa()->GetClockSource(), ChallengeTransaction->GetToken());
-				//Notify all link dependent services they can start.
-				ServicesManager->NotifyServicesLinkUpdated(true);
 				SetNextRunASAP();
 				ClockSyncerPointer->StampSynced();
-				
+
 #ifdef DEBUG_LOLA
-				Serial.print("Link took ");
+				Serial.print(F("Link took "));
 				Serial.print(millis() - ConnectionProcessStart);
-				Serial.println(" ms to establish.");
-				Serial.print("Sync TimeStamp: ");
+				Serial.println(F(" ms to establish."));
+				Serial.print(F("Average latency: "));
+				Serial.print((float)LatencyMeter.GetAverageLatency() / (float)2000, 2);
+				Serial.println(F(" ms"));
+				Serial.print(F("Sync TimeStamp: "));
 				Serial.println(ClockSyncerPointer->GetMillisSync());
 #endif
+
+				//Notify all link dependent services they can start.
+				ServicesManager->NotifyServicesLinkUpdated(true);
 				break;
 			case LoLaLinkInfo::LinkStateEnum::Disabled:
 			default:
@@ -499,7 +509,9 @@ protected:
 			UpdateLinkState(LoLaLinkInfo::LinkStateEnum::AwaitingLink);
 			break;
 		case LoLaLinkInfo::LinkStateEnum::Connecting:
-			if (GetElapsedSinceStateStart() > LOLA_LINK_SERVICE_MAX_BEFORE_CONNECTING_CANCEL)
+			if (SessionId == LOLA_LINK_SERVICE_INVALID_SESSION ||
+				RemotePMAC == LOLA_INVALID_PMAC || 
+				GetElapsedSinceStateStart() > LOLA_LINK_SERVICE_MAX_BEFORE_CONNECTING_CANCEL)
 			{
 				UpdateLinkState(LoLaLinkInfo::LinkStateEnum::AwaitingSleeping);
 				SetNextRunASAP();
@@ -529,8 +541,8 @@ protected:
 		{
 			return 0;
 		}
-	}	
-	
+	}
+
 	uint32_t GetElapsedLastSent()
 	{
 		if (GetLoLa()->GetLastSentMillis() != ILOLA_INVALID_MILLIS)
@@ -732,7 +744,7 @@ protected:
 
 		//Rest of Payload is set on OnPreSend.
 	}
-	
+
 
 	void PrepareClockSyncResponse(const uint8_t requestId, const uint32_t estimationError)
 	{														//Host
